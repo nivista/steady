@@ -11,7 +11,7 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/nivista/steady/timer"
 )
 
 func InitConsumer(c *Client) {

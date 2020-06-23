@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/nivista/steady/timer"
 )
 
-func TestA(t *testing.T) {
+func TestCreateTimer(t *testing.T) {
 	c, err := NewClient(context.Background())
 
 	if err != nil {
@@ -40,7 +40,7 @@ func TestA(t *testing.T) {
 	}
 }
 
-func TestB(t *testing.T) {
+func TestGetTimer(t *testing.T) {
 	c, err := NewClient(context.Background())
 
 	if err != nil {

@@ -1,8 +1,8 @@
 package manager
 
 import (
-	"github.com/nivista/tasktimer/messaging"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/nivista/steady/messaging"
+	"github.com/nivista/steady/timer"
 )
 
 type coordinator struct {

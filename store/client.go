@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/nivista/steady/timer"
 )
 
 type Client struct {
@@ -21,35 +21,10 @@ type (
 )
 
 const (
-	http taskType = "HTTP"
-)
-
-const (
+	http     taskType     = "HTTP"
 	cron     scheduleType = "CRON"
 	interval scheduleType = "INTERVAL"
 )
-
-func (t *taskType) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("Expected []byte in Scan of taskType")
-	}
-
-	*t = taskType(string(bytes)) // could i go straight to tasktype?
-
-	return nil
-}
-
-func (t *scheduleType) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("Expected []byte in Scan of scheduleType")
-	}
-
-	*t = scheduleType(string(bytes))
-
-	return nil
-}
 
 func NewClient(ctx context.Context) (*Client, error) {
 	dbpool, err := pgxpool.Connect(context.Background(), os.Getenv("DATABASE_CONN"))
@@ -160,4 +135,26 @@ func (c *Client) SetExecCount(ctx context.Context, account string, id uuid.UUID,
 			where account=$2 and id=$3`,
 		count, account, id)
 	return err
+}
+
+func (t *taskType) Scan(value interface{}) error {
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New("Expected []byte in Scan of taskType")
+	}
+
+	*t = taskType(bytes)
+
+	return nil
+}
+
+func (t *scheduleType) Scan(value interface{}) error {
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New("Expected []byte in Scan of scheduleType")
+	}
+
+	*t = scheduleType(bytes)
+
+	return nil
 }

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	"github.com/gofrs/uuid"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/google/uuid"
+	"github.com/nivista/steady/timer"
 )
 
 type Client struct {

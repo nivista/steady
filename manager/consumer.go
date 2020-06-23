@@ -11,15 +11,16 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/tasktimer/messaging"
-	"github.com/nivista/tasktimer/timer"
+	"github.com/nivista/steady/messaging"
+	"github.com/nivista/steady/timer"
 )
 
+// InitConsumer starts consuming timers from Kafka and executing them.
 func InitConsumer(c *messaging.Client) {
 
 	config := sarama.NewConfig()
 
-	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
+	config.Consumer.Group.Rebalance.Strategy = consistentHash(0)
 
 	cord := newCoordinator(c)
 	myConsumer := consumer{queue: c, cord: cord}
