@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"github.com/google/uuid"
 	"github.com/nivista/steady/messaging"
 	"github.com/nivista/steady/timer"
 )
@@ -25,7 +26,7 @@ func (c *coordinator) handleRepartition(newPartitions []int32) {
 	newPartitionsSet := make(map[int32]bool)
 	for _, partition := range newPartitions {
 		if !c.hasPartition(partition) {
-			c.partitionData[partition] = &partitionData{&manager{}, -1}
+			c.partitionData[partition] = &partitionData{newManager(c.queue), -1}
 		}
 		newPartitionsSet[partition] = true
 	}
@@ -48,19 +49,19 @@ func (c *coordinator) setHighWatermark(partition int32, offset int64) {
 func (c *coordinator) addTimer(t *timer.Timer, partition int32, offset int64) {
 	data := c.partitionData[partition]
 	man := data.manager
-	if offset >= data.fireOffset {
+	if offset == data.fireOffset {
 		man.start()
 	}
 	man.addTimer(t)
 }
 
-func (c *coordinator) removeTimer(t *timer.Timer, partition int32, offset int64) {
+func (c *coordinator) removeTimer(id uuid.UUID, partition int32, offset int64) {
 	data := c.partitionData[partition]
 	man := data.manager
-	if offset >= data.fireOffset {
+	if offset == data.fireOffset {
 		man.start()
 	}
-	man.removeTimer(t)
+	man.removeTimer(id)
 }
 
 func (c *coordinator) hasPartition(partition int32) bool {

@@ -2,7 +2,6 @@ package manager
 
 import (
 	"hash/crc32"
-	"log"
 	"sort"
 	"strconv"
 
@@ -15,7 +14,7 @@ type consistentHash int
 type hashringNode struct {
 	name         string
 	hash         uint32
-	partitionIdx int
+	partitionIdx uint32
 }
 
 type hashring []*hashringNode
@@ -45,19 +44,18 @@ func (c consistentHash) Name() string {
 	return "ConsistentHash"
 }
 
-// Plan to consistently hash and assign partitions
+// Plan to consistently hash partitions.
 func (c consistentHash) Plan(members map[string]sarama.ConsumerGroupMemberMetadata, topics map[string][]int32) (sarama.BalanceStrategyPlan, error) {
 	plan := make(sarama.BalanceStrategyPlan)
 	membersList := make([]string, len(members))
 	i := 0
 	for member := range members {
-		log.Println(members[member])
 		membersList[i] = member
 		i++
 	}
 
 	for topic, partitions := range topics {
-		assignment := consistentHashPartition(membersList, partitions)
+		assignment := consistentHashTopic(membersList, partitions)
 		for _, member := range membersList {
 			if _, ok := plan[member]; !ok {
 				plan[member] = make(map[string][]int32)
@@ -70,16 +68,16 @@ func (c consistentHash) Plan(members map[string]sarama.ConsumerGroupMemberMetada
 }
 
 // Given a list of members and partitions, returns a map from member to list of paritions.
-func consistentHashPartition(members []string, partitions []int32) map[string][]int32 {
+func consistentHashTopic(members []string, partitions []int32) map[string][]int32 {
 	ring := hashring{}
-	nHashes := 2
+	nHashes := 2 // TODO: make configurable
 	for _, name := range members {
 		for i := 0; i < nHashes; i++ {
 			hash := crc32.ChecksumIEEE([]byte(name + strconv.Itoa(i)))
 			ring = append(ring, &hashringNode{
 				name:         name,
 				hash:         hash,
-				partitionIdx: int(hash % uint32(len(partitions))), // will this ever error?
+				partitionIdx: hash % uint32(len(partitions)),
 			})
 		}
 	}

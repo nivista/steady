@@ -8,32 +8,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestMarshalInterval(t *testing.T) {
-	i := Interval{
-		Start:      time.Now().UTC(),
-		Interval:   100,
-		Executions: 10,
-	}
-
-	bytes, err := i.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf(string(bytes))
-	t.Logf("len of encoding: %v\n", len(bytes))
-
-	var i2 Interval
-	err = i2.UnmarshalBinary(bytes)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(i, i2) {
-		t.Fatal("Not equal.")
-	}
-}
-
 func TestMarshalTimer(t *testing.T) {
 	tim := getMockTimer()
 
@@ -64,13 +38,13 @@ func getMockTimer() Timer {
 
 	timer := Timer{
 		ID:             id,
-		Account:        "Hello",
+		Domain:         "Hello",
 		ExecutionCount: 10,
 		Task: &HTTP{
 			URL:     "http://www.example.com/",
 			Method:  GET,
 			Body:    "hello go",
-			Headers: []string{"set-cookie:yum"},
+			Headers: map[string]string{"set-cookie": "yum"},
 		},
 		Schedule: &Cron{
 			Start:      time.Unix(0, 0).UTC(), // important, we're not encoding location so make sure it's set to nil (UTC)

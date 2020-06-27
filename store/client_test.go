@@ -19,7 +19,7 @@ func TestCreateTimer(t *testing.T) {
 	id, _ := uuid.NewRandom()
 	newTimer := timer.Timer{
 		ID:             id,
-		Account:        "bob",
+		Domain:         "bob",
 		ExecutionCount: 5,
 		Task: &timer.HTTP{
 			URL:    "www.example.org",

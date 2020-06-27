@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -54,32 +55,32 @@ func (c *Client) CreateTimer(ctx context.Context, t timer.Timer) error {
 		panic(fmt.Sprintf("CreateTimer doesn't know about %T", schedule))
 	}
 
-	task, err := t.Task.MarshalBinary()
+	task, err := json.Marshal(t.Task)
 	if err != nil {
 		return err
 	}
-	sched, err := t.Schedule.MarshalBinary()
+	sched, err := json.Marshal(t.Schedule)
 	if err != nil {
 		return err
 	}
 
 	_, err = c.Query(ctx,
-		`insert into timers (id, account, executionCount, taskType, task, scheduleType, schedule, meta) 
+		`insert into timers (id, domain, executionCount, taskType, task, scheduleType, schedule, meta) 
 			values ($1, $2, $3, $4, $5, $6, $7, $8)
 			on conflict do nothing`,
-		t.ID, t.Account, t.ExecutionCount, tt, task, st, sched, t.Meta)
+		t.ID, t.Domain, t.ExecutionCount, tt, task, st, sched, t.Meta)
 
 	return err
 }
 
-func (c *Client) DeleteTimer(ctx context.Context, account string, id uuid.UUID) error {
+func (c *Client) DeleteTimer(ctx context.Context, domain string, id uuid.UUID) error {
 	_, err := c.Query(ctx, //TODO check if a timer was deleted
-		`delete from timers where account=$1 and id=$2`,
-		account, id)
+		`delete from timers where domain=$1 and id=$2`,
+		domain, id)
 	return err
 }
 
-func (c *Client) GetTimer(ctx context.Context, account string, id uuid.UUID) (*timer.Timer, error) {
+func (c *Client) GetTimer(ctx context.Context, domain string, id uuid.UUID) (*timer.Timer, error) {
 	t := timer.Timer{}
 
 	var tt taskType
@@ -87,9 +88,9 @@ func (c *Client) GetTimer(ctx context.Context, account string, id uuid.UUID) (*t
 	var taskBytes, scheduleBytes []byte
 
 	err := c.QueryRow(ctx,
-		`select id, account, executionCount, taskType, task, scheduleType, schedule, meta from timers 
-			where account=$1 and id=$2`,
-		account, id).Scan(&t.ID, &t.Account, &t.ExecutionCount, &tt, &taskBytes, &st, &scheduleBytes, &t.Meta)
+		`select id, domain, executionCount, taskType, task, scheduleType, schedule, meta from timers 
+			where domain=$1 and id=$2`,
+		domain, id).Scan(&t.ID, &t.Domain, &t.ExecutionCount, &tt, &taskBytes, &st, &scheduleBytes, &t.Meta)
 
 	if err != nil {
 		return nil, err
@@ -98,7 +99,7 @@ func (c *Client) GetTimer(ctx context.Context, account string, id uuid.UUID) (*t
 	switch tt {
 	case http:
 		var task timer.HTTP
-		err = task.UnmarshalBinary(taskBytes)
+		err = json.Unmarshal(taskBytes, &task)
 		if err != nil {
 			return nil, err // TODO, make custom error types
 		}
@@ -110,14 +111,14 @@ func (c *Client) GetTimer(ctx context.Context, account string, id uuid.UUID) (*t
 	switch st {
 	case cron:
 		var schedule timer.Cron
-		err = schedule.UnmarshalBinary(taskBytes)
+		err = json.Unmarshal(scheduleBytes, &schedule)
 		if err != nil {
 			return nil, err
 		}
 		t.Schedule = &schedule
 	case interval:
 		var schedule timer.Interval
-		err := schedule.UnmarshalBinary(scheduleBytes)
+		err := json.Unmarshal(scheduleBytes, schedule)
 		if err != nil {
 			return nil, err
 		}
@@ -128,12 +129,12 @@ func (c *Client) GetTimer(ctx context.Context, account string, id uuid.UUID) (*t
 	return &t, nil
 }
 
-func (c *Client) SetExecCount(ctx context.Context, account string, id uuid.UUID, count int) error {
+func (c *Client) SetExecCount(ctx context.Context, domain string, id uuid.UUID, count int) error {
 	_, err := c.Query(ctx,
 		`update timers
 			set executionCount=$1
-			where account=$2 and id=$3`,
-		count, account, id)
+			where domain=$2 and id=$3`,
+		count, domain, id)
 	return err
 }
 

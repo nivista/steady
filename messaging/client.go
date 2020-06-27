@@ -1,13 +1,14 @@
 package messaging
 
 import (
+	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
 	"github.com/nivista/steady/timer"
+	"github.com/nivista/steady/utils"
 )
 
 type Client struct {
@@ -16,19 +17,36 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	partitionsString := os.Getenv("PARTITIONS")
-	partitions, err := strconv.Atoi(partitionsString)
+	brokerList := strings.Split(os.Getenv("KAFKA_PEERS"), ",")
+
+	broker := sarama.NewBroker(brokerList[0])
+	brokerConfig := sarama.NewConfig()
+	err := broker.Open(brokerConfig)
 	if err != nil {
 		panic(err)
 	}
 
-	config := sarama.NewConfig()
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 10
-	config.Producer.Return.Successes = true
+	req := sarama.MetadataRequest{
+		Topics: []string{"timers"},
+	}
 
-	brokerList := strings.Split(os.Getenv("KAFKA_PEERS"), ",")
-	prod, err := sarama.NewSyncProducer(brokerList, config)
+	res, err := broker.GetMetadata(&req)
+	if err != nil {
+		panic(err)
+	}
+	partitions := len(res.Topics[0].Partitions)
+	fmt.Println("partitions:", partitions)
+
+	if err != nil {
+		panic(err)
+	}
+
+	prodConfig := sarama.NewConfig()
+	prodConfig.Producer.RequiredAcks = sarama.WaitForAll
+	prodConfig.Producer.Retry.Max = 10
+	prodConfig.Producer.Return.Successes = true
+
+	prod, err := sarama.NewSyncProducer(brokerList, prodConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -36,8 +54,34 @@ func NewClient() *Client {
 	return &c
 }
 
-func (c *Client) UpsertTimer(t *timer.Timer) error {
-	idBytes, err := t.ID.MarshalBinary()
+func (c *Client) PublishAdd(t *timer.Timer) error {
+	return c.upsertTimer(t)
+}
+
+func (c *Client) PublishUpdate(t *timer.Timer) error {
+	return c.upsertTimer(t)
+}
+
+func (c *Client) PublishDelete(domain string, id uuid.UUID) error {
+	key, err := utils.NewTimerKey(domain, id)
+	if err != nil {
+		return err
+	}
+
+	partition := c.bytesToPartition([16]byte(id))
+
+	m := sarama.ProducerMessage{
+		Topic:     "timers",
+		Key:       key,
+		Partition: partition,
+	}
+
+	_, _, err = c.prod.SendMessage(&m)
+	return err
+}
+
+func (c *Client) upsertTimer(t *timer.Timer) error {
+	key, err := utils.NewTimerKey(t.Domain, t.ID)
 	if err != nil {
 		return err
 	}
@@ -50,26 +94,8 @@ func (c *Client) UpsertTimer(t *timer.Timer) error {
 
 	m := sarama.ProducerMessage{
 		Topic:     "timers",
-		Key:       sarama.ByteEncoder(idBytes),
+		Key:       key,
 		Value:     sarama.ByteEncoder(timerBytes),
-		Partition: partition,
-	}
-
-	_, _, err = c.prod.SendMessage(&m)
-	return err
-}
-
-func (c *Client) DeleteTimer(id uuid.UUID) error {
-	idBytes, err := id.MarshalBinary()
-	if err != nil {
-		return err
-	}
-
-	partition := c.bytesToPartition([16]byte(id))
-
-	m := sarama.ProducerMessage{
-		Topic:     "timers",
-		Key:       sarama.ByteEncoder(idBytes),
 		Partition: partition,
 	}
 

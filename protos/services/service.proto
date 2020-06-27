@@ -6,7 +6,7 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/nivista/steady/.gen/protos/services";
 
-service TaskTimer {
+service Steady {
     rpc CreateTimer (CreateTimerRequest) returns (CreateTimerResponse) {}
 
     rpc DeleteTimer (DeleteTimerRequest) returns (DeleteTimerResponse) {}

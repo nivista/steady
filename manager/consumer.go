@@ -13,6 +13,7 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/messaging"
 	"github.com/nivista/steady/timer"
+	"github.com/nivista/steady/utils"
 )
 
 // InitConsumer starts consuming timers from Kafka and executing them.
@@ -20,14 +21,24 @@ func InitConsumer(c *messaging.Client) {
 
 	config := sarama.NewConfig()
 
+	version, err := sarama.ParseKafkaVersion("2.2.1")
+	if err != nil {
+		panic(err)
+	}
+	config.Version = version
+
 	config.Consumer.Group.Rebalance.Strategy = consistentHash(0)
 
 	cord := newCoordinator(c)
-	myConsumer := consumer{queue: c, cord: cord}
+	myConsumer := consumer{
+		queue: c,
+		cord:  cord,
+		ready: make(chan bool),
+	}
 
 	brokers := os.Getenv("KAFKA_PEERS")
 	ctx, cancel := context.WithCancel(context.Background())
-	client, err := sarama.NewConsumerGroup(strings.Split(brokers, ","), "store", config)
+	client, err := sarama.NewConsumerGroup(strings.Split(brokers, ","), "timers", config)
 
 	if err != nil {
 		panic(err)
@@ -101,13 +112,25 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 	c.cord.setHighWatermark(claim.Partition(), claim.HighWaterMarkOffset())
 
 	for message := range claim.Messages() {
-		var t timer.Timer
-		err := t.UnmarshalBinary(message.Value)
-		if err != nil {
-			fmt.Printf("manager/consumer.go unmarshalbinary :: %v\n", err)
-		}
 
-		c.cord.addTimer(&t, claim.Partition(), message.Offset)
+		_, id, _ := utils.ParseTimerKey(message.Key)
+		fmt.Println("id:", id)
+		if len(message.Value) == 0 {
+			_, id, err := utils.ParseTimerKey(message.Key)
+			if err != nil {
+				fmt.Println("error parsing timer key: ", err)
+			}
+			c.cord.removeTimer(id, claim.Partition(), message.Offset)
+		} else {
+			var t timer.Timer
+			err := t.UnmarshalBinary(message.Value)
+			if err != nil {
+				fmt.Printf("manager/consumer.go unmarshalbinary :: %v\n", err)
+			}
+			if t.ExecutionCount == 0 {
+				c.cord.addTimer(&t, claim.Partition(), message.Offset)
+			}
+		}
 		session.MarkMessage(message, "")
 	}
 

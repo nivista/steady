@@ -12,15 +12,22 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/timer"
+	"github.com/nivista/steady/utils"
 )
 
 func InitConsumer(c *Client) {
 
 	config := sarama.NewConfig()
 
+	version, err := sarama.ParseKafkaVersion("2.2.1")
+	if err != nil {
+		panic(err)
+	}
+	config.Version = version
+
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 
-	myConsumer := consumer{db: c}
+	myConsumer := consumer{db: c, ready: make(chan bool)}
 
 	brokers := os.Getenv("KAFKA_PEERS")
 	ctx, cancel := context.WithCancel(context.Background())
@@ -86,15 +93,28 @@ func (c *consumer) Cleanup(sarama.ConsumerGroupSession) error {
 func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 
 	for message := range claim.Messages() {
-		var t timer.Timer
-		err := t.UnmarshalBinary(message.Value)
-		if err != nil {
-			fmt.Printf("store/consumer.go unmarshalbinary :: %v\n", err)
-		}
+		if len(message.Value) == 0 {
+			domain, id, err := utils.ParseTimerKey(message.Key)
+			if err != nil {
+				fmt.Println("Unable to parse key: ", err)
+			}
 
-		err = c.db.CreateTimer(context.Background(), t)
-		if err != nil {
-			fmt.Printf("store/consumer createtimer error :: %v\n", err)
+			err = c.db.DeleteTimer(context.Background(), domain, id)
+			if err != nil {
+				fmt.Printf("store/consumer createtimer error :: %v\n", err)
+			}
+		} else {
+			var t timer.Timer
+
+			err := t.UnmarshalBinary(message.Value)
+			if err != nil {
+				fmt.Printf("store/consumer.go unmarshalbinary :: %v\n", err)
+			}
+
+			err = c.db.CreateTimer(context.Background(), t)
+			if err != nil {
+				fmt.Printf("store/consumer createtimer error :: %v\n", err)
+			}
 		}
 		session.MarkMessage(message, "")
 	}
