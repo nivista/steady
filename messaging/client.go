@@ -1,8 +1,8 @@
 package messaging
 
 import (
-	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/Shopify/sarama"
@@ -11,72 +11,66 @@ import (
 	"github.com/nivista/steady/utils"
 )
 
+// Client is a synchronous messaging client to the queue.
 type Client struct {
-	prod       sarama.SyncProducer
-	partitions int32
+	producer   sarama.SyncProducer
+	partitions int
+	topic      string
 }
 
+// NewClient returns a new Client.
 func NewClient() *Client {
-	brokerList := strings.Split(os.Getenv("KAFKA_PEERS"), ",")
+	client := Client{}
 
-	broker := sarama.NewBroker(brokerList[0])
-	brokerConfig := sarama.NewConfig()
-	err := broker.Open(brokerConfig)
+	client.topic = os.Getenv("TIMER_TOPIC")
+
+	partitions, err := strconv.Atoi(os.Getenv("TIMER_PARTITIONS"))
 	if err != nil {
 		panic(err)
 	}
-
-	req := sarama.MetadataRequest{
-		Topics: []string{"timers"},
-	}
-
-	res, err := broker.GetMetadata(&req)
-	if err != nil {
-		panic(err)
-	}
-	partitions := len(res.Topics[0].Partitions)
-	fmt.Println("partitions:", partitions)
-
-	if err != nil {
-		panic(err)
-	}
+	client.partitions = partitions
 
 	prodConfig := sarama.NewConfig()
 	prodConfig.Producer.RequiredAcks = sarama.WaitForAll
 	prodConfig.Producer.Retry.Max = 10
 	prodConfig.Producer.Return.Successes = true
 
-	prod, err := sarama.NewSyncProducer(brokerList, prodConfig)
+	brokerAddrs := strings.Split(os.Getenv("KAFKA_PEERS"), ":")
+	producer, err := sarama.NewSyncProducer(brokerAddrs, prodConfig)
 	if err != nil {
 		panic(err)
 	}
-	c := Client{prod: prod, partitions: int32(partitions)}
-	return &c
+	client.producer = producer
+
+	return &client
 }
 
-func (c *Client) PublishAdd(t *timer.Timer) error {
+// PublishCreate publishes a timer creation to the queue synchronously.
+func (c *Client) PublishCreate(t *timer.Timer) error {
 	return c.upsertTimer(t)
 }
 
+// PublishUpdate publishes a timer update to the queue synchronously.
 func (c *Client) PublishUpdate(t *timer.Timer) error {
 	return c.upsertTimer(t)
 }
 
+// PublishDelete publishes a timer deletion to the queue synchronously.
 func (c *Client) PublishDelete(domain string, id uuid.UUID) error {
 	key, err := utils.NewTimerKey(domain, id)
 	if err != nil {
 		return err
 	}
 
-	partition := c.bytesToPartition([16]byte(id))
+	partition := c.idToPartition(id)
 
 	m := sarama.ProducerMessage{
-		Topic:     "timers",
+		Topic:     c.topic,
 		Key:       key,
 		Partition: partition,
 	}
 
-	_, _, err = c.prod.SendMessage(&m)
+	_, _, err = c.producer.SendMessage(&m)
 	return err
 }
 
@@ -90,27 +84,27 @@ func (c *Client) upsertTimer(t *timer.Timer) error {
 	if err != nil {
 		return err
 	}
-	partition := c.bytesToPartition([16]byte(t.ID))
+	partition := c.idToPartition(t.ID)
 
 	m := sarama.ProducerMessage{
-		Topic:     "timers",
+		Topic:     c.topic,
 		Key:       key,
 		Value:     sarama.ByteEncoder(timerBytes),
 		Partition: partition,
 	}
 
-	_, _, err = c.prod.SendMessage(&m)
+	_, _, err = c.producer.SendMessage(&m)
 	return err
 }
 
-func (c *Client) bytesToPartition(id [16]byte) int32 {
-	var partition int32
+func (c *Client) idToPartition(id [16]byte) int32 {
+	var partition int
 
 	for b := range id {
-		partition = partition << 8
-		partition += int32(b)
-		partition = partition % c.partitions
+		partition <<= 8
+		partition += b
+		partition %= c.partitions
 	}
 
-	return partition
+	return int32(partition)
 }

@@ -47,7 +47,7 @@ func (s *steadyServer) CreateTimer(ctx context.Context, timerReq *services.Creat
 		Meta:     meta,
 	}
 
-	err = s.messenger.PublishAdd(&t)
+	err = s.messenger.PublishCreate(&t)
 	if err != nil {
 		return nil, err
 	}
