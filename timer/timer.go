@@ -11,12 +11,12 @@ import (
 // Timer definition
 type (
 	Timer struct {
-		ID             uuid.UUID
-		Domain         string
-		ExecutionCount uint32
-		Meta           Meta
-		Task           Task
-		Schedule       Schedule
+		ID       uuid.UUID
+		Domain   string
+		Task     Task
+		Schedule Schedule
+		Meta     Meta
+		progress progress
 	}
 
 	// Task represents a timer task.
@@ -32,6 +32,12 @@ type (
 	// Meta represents timer metadata.
 	Meta struct {
 		CreationTime time.Time
+	}
+
+	// Progress represents the execution progress of the timer
+	progress struct {
+		completed int
+		skipped   int
 	}
 )
 
