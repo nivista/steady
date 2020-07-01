@@ -1,8 +1,6 @@
 syntax = "proto3";
 
-package steady;
-
-import "google/protobuf/timestamp.proto";
+import "protos/shared.proto";
 
 option go_package = "github.com/nivista/steady/.gen/protos/services";
 
@@ -16,8 +14,8 @@ service Steady {
 
 message CreateTimerRequest {
     string domain = 1;
-    TaskConfig task_config = 2;
-    ScheduleConfig schedule_config = 3;
+    Task task = 2;
+    Schedule schedule = 3;
 }
 
 message CreateTimerResponse {
@@ -39,48 +37,8 @@ message GetTimerRequest {
 message GetTimerResponse {
     string timer_uuid = 1;
     uint32 execution_count = 2;
-    Meta meta = 3;
-    TaskConfig task_config = 4;
-    ScheduleConfig schedule_config = 5;
-}
-
-message ScheduleConfig {
-    oneof schedule_config {
-        CronConfig cron_config = 1;
-        IntervalConfig interval_config = 2;
-    }
-}
-
-message TaskConfig {
-    oneof task_config {
-        HTTPConfig http_config = 1;
-    }
-}
-
-message Meta {
-    google.protobuf.Timestamp create_time = 1;
-}
-
-enum Method {
-    GET = 0;
-    POST = 1;
-}
-
-message HTTPConfig {
-    string url = 1;
-    Method method = 2;
-    string body = 3;
-    map<string, string> headers = 4;
-}
-
-message IntervalConfig {
-    google.protobuf.Timestamp start_time = 1;
-    int32 interval = 2;
-    sint32 executions = 3;
-}
-
-message CronConfig {
-    google.protobuf.Timestamp start_time = 1;
-    string cron = 2;
-    sint32 executions = 3;
+    Task task = 3;
+    Schedule schedule = 4;
+    Meta meta = 5;
+    Progress progress = 6;
 }
