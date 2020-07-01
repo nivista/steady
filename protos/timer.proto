@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/nivista/steady/.gen/protos/timer";
+
+message Schedule {
+    oneof schedule {
+        CronConfig cron_config = 1;
+        IntervalConfig interval_config = 2;
+    }
+}
+
+message Task {
+    oneof task {
+        HTTPConfig http_config = 1;
+    }
+}
+
+message Meta {
+    google.protobuf.Timestamp create_time = 1;
+}
+
+
+enum Method {
+    GET = 0;
+    POST = 1;
+}
+
+message HTTPConfig {
+    string url = 1;
+    Method method = 2;
+    string body = 3;
+    map<string, string> headers = 4;
+}
+
+message IntervalConfig {
+    google.protobuf.Timestamp start_time = 1;
+    int32 interval = 2;
+    sint32 executions = 3;
+}
+
+message CronConfig {
+    google.protobuf.Timestamp start_time = 1;
+    string cron = 2;
+    sint32 executions = 3;
+}
