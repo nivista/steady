@@ -21,6 +21,10 @@ message Meta {
     google.protobuf.Timestamp create_time = 1;
 }
 
+message Progress {
+    int32 completed = 1;
+    int32 skipped = 2;
+}
 
 enum Method {
     GET = 0;
