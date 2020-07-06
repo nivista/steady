@@ -2,6 +2,8 @@ syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
 
+option go_package = "github.com/nivista/steady/.gen/protos/common";
+
 message Schedule {
     oneof schedule {
         CronConfig cron_config = 1;

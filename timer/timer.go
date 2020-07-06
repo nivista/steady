@@ -1,144 +1,95 @@
 package timer
 
 import (
-	"encoding/json"
 	"errors"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/nivista/steady/.gen/protos/common"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Timer definition
 type (
 	Timer struct {
-		ID             uuid.UUID
-		Domain         string
-		ExecutionCount uint32
-		Meta           Meta
-		Task           Task
-		Schedule       Schedule
+		progress progress
+		meta     meta
+		executer
+		scheduler
 	}
 
-	// Task represents a timer task.
-	Task interface {
-		isTask()
+	meta struct {
+		creationTime time.Time
 	}
 
-	// Schedule represents the "when" configuration of a timer.
-	Schedule interface {
-		isSchedule()
+	progress struct {
+		completed int
+		skipped   int
 	}
 
-	// Meta represents timer metadata.
-	Meta struct {
-		CreationTime time.Time
-	}
-)
-
-// HTTP Task represents an HTTP request.
-type (
-	HTTP struct {
-		URL string
-		Method
-		Body    string
-		Headers map[string]string
+	executer interface {
+		execute()
+		toProto() *common.Task
 	}
 
-	// Method is the method of the HTTP request.
-	Method int
-)
-
-func (HTTP) isTask() {}
-
-// Method definitions
-const (
-	GET Method = iota
-	POST
-)
-
-// Schedule definitions
-type (
-	// Cron is a schedule configured by a cron string.
-	Cron struct {
-		Start      time.Time
-		Cron       string
-		Executions int32
-	}
-
-	// Interval is a schedule configured by a fixed interval.
-	Interval struct {
-		Start      time.Time
-		Interval   int32
-		Executions int32
+	scheduler interface {
+		schedule(progress *progress, task executer, updateProgress chan<- int, stop <-chan int)
+		toProto() *common.Schedule
 	}
 )
 
-func (Cron) isSchedule() {}
-
-func (Interval) isSchedule() {}
-
-// MarshalBinary marshals a timer to a []byte.
-func (t *Timer) MarshalBinary() ([]byte, error) {
-	// Use json package to turn timer into map[string]interface
-	bytes, err := json.Marshal(t)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]interface{}
-	err = json.Unmarshal(bytes, &m)
-	if err != nil {
-		return nil, err
-	}
-
-	// Set "type indicators"
-	var sched string
-	switch t.Schedule.(type) {
-	case *Cron:
-		sched = "cron"
-	case *Interval:
-		sched = "interval"
-	default:
-		panic("Can't marshal schedule, unknown type.")
-	}
-	m["scheduleType"] = sched
-
-	var task string
-	switch t.Task.(type) {
-	case *HTTP:
-		task = "http"
-	default:
-		panic("Can't marshal task, unknown type.")
-	}
-	m["taskType"] = task
-
-	return json.Marshal(m)
+// Work returns a channel that counts the number of times progress was updated, as well as a stop channel.
+func (t *Timer) Work() (updateProgress chan<- int, stop <-chan int) {
+	updateProgress = make(chan int)
+	stop = make(chan int)
+	go t.schedule(&t.progress, t.executer, updateProgress, stop)
+	return
 }
 
-// UnmarshalBinary unmarshals a timer into a []byte.
-func (t *Timer) UnmarshalBinary(bytes []byte) error {
-	var m map[string]interface{}
-	err := json.Unmarshal(bytes, &m)
-	if err != nil {
-		return err
-	}
+// ToMessageProto creates a messaging.Timer from this Timer.
+func (t *Timer) ToMessageProto() *messaging.Timer {
+	p := messaging.Timer{}
+	p.Meta = &common.Meta{CreateTime: timestamppb.New(t.meta.creationTime)}
+	p.Progress = &common.Progress{Completed: int32(t.progress.completed), Skipped: int32(t.progress.skipped)}
+	p.Task = t.executer.toProto()
+	p.Schedule = t.scheduler.toProto()
+	return &p
+}
 
-	*t = Timer{}
+// FromMessageProto gets a Timer from a messaging.Timer.
+func (t *Timer) FromMessageProto(p *messaging.Timer) error {
+	newT := Timer{}
+	newT.meta = meta{creationTime: p.Meta.CreateTime.AsTime()}
+	newT.progress = progress{completed: int(p.Progress.Completed), skipped: int(p.Progress.Skipped)}
 
-	switch m["scheduleType"] {
-	case "cron":
-		t.Schedule = &Cron{}
-	case "interval":
-		t.Schedule = &Interval{}
+	switch task := p.Task.Task.(type) {
+	case *common.Task_HttpConfig:
+		var h http
+		if err := h.fromProto(task); err != nil {
+			return err
+		}
+		newT.executer = h
 	default:
-		return errors.New("unknown schedule type")
+		return errors.New("Unknown Task")
 	}
 
-	switch m["taskType"] {
-	case "http":
-		t.Task = &HTTP{}
+	switch sched := p.Schedule.Schedule.(type) {
+	case *common.Schedule_CronConfig:
+		var c cron
+		if err := c.fromProto(sched); err != nil {
+			return err
+		}
+		newT.scheduler = c
+	case *common.Schedule_IntervalConfig:
+		var i interval
+		if err := i.fromProto(sched); err != nil {
+			return err
+		}
+		newT.scheduler = i
 	default:
-		return errors.New("unknown task type")
+		return errors.New("Unknown Schedule")
 	}
 
-	return json.Unmarshal(bytes, t)
+	*t = newT
+	return nil
 }

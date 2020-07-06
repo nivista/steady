@@ -4,57 +4,79 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
 )
 
-func TestMarshalTimer(t *testing.T) {
-	tim := getMockTimer()
-
-	bytes, err := tim.MarshalBinary()
-
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(string(bytes))
-	t.Logf("Encoding size: %v\n", len(bytes))
-
-	var tim2 Timer
-
-	err = tim2.UnmarshalBinary(bytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	//bytes, _ = tim2.MarshalBinary()
-	t.Log(tim)
-	t.Log(tim2)
-	if !reflect.DeepEqual(tim.Task, tim2.Task) {
-		t.Fatal("Not equal.")
+func getHttpCron() *Timer {
+	return &Timer{
+		meta: meta{
+			creationTime: time.Unix(0, 0).UTC(),
+		},
+		progress: progress{
+			completed: 5,
+			skipped:   1,
+		},
+		executer: http{
+			method:  GET,
+			url:     "http://example.com",
+			body:    "",
+			headers: map[string]string{"set-cookie": "hello:cookie"},
+		},
+		scheduler: cron{
+			start:      time.Unix(0, 0).UTC(),
+			executions: 10,
+			min:        -1,
+			hour:       2,
+			dayOfMonth: 3,
+			month:      3,
+			dayOfWeek:  -1,
+		},
 	}
 }
 
-func getMockTimer() Timer {
-	id, _ := uuid.Parse("09ef702a-3475-4cf4-8503-ad915f9abb5f")
-
-	timer := Timer{
-		ID:             id,
-		Domain:         "Hello",
-		ExecutionCount: 10,
-		Task: &HTTP{
-			URL:     "http://www.example.com/",
-			Method:  GET,
-			Body:    "hello go",
-			Headers: map[string]string{"set-cookie": "yum"},
+func getHttpInterval() *Timer {
+	return &Timer{
+		meta: meta{
+			creationTime: time.Unix(0, 0).UTC(),
 		},
-		Schedule: &Cron{
-			Start:      time.Unix(0, 0).UTC(), // important, we're not encoding location so make sure it's set to nil (UTC)
-			Cron:       "* * * * *",
-			Executions: 10,
+		progress: progress{
+			completed: 5,
+			skipped:   1,
 		},
-		Meta: Meta{
-			CreationTime: time.Unix(0, 0).UTC(),
+		executer: http{
+			method:  GET,
+			url:     "http://example.com",
+			body:    "",
+			headers: map[string]string{"set-cookie": "hello:cookie"},
+		},
+		scheduler: interval{
+			start:      time.Unix(0, 0).UTC(),
+			interval:   100,
+			executions: 10,
 		},
 	}
+}
 
-	return timer
+func TestProto(t *testing.T) {
+	timers := []*Timer{getHttpCron(), getHttpInterval()}
+
+	for idx, timer := range timers {
+		proto := timer.ToMessageProto()
+
+		var timerTwo Timer
+		if err := timerTwo.FromMessageProto(proto); err != nil {
+			t.Errorf("FromMessageProto at idx %v failed w/ error: %v\n", idx, err)
+		}
+
+		if !reflect.DeepEqual(*timer, timerTwo) {
+			t.Errorf("Going to and from proto yielded a different timer at idx %v\n", idx)
+		}
+	}
+}
+
+type MockExecutor struct {
+	count int
+}
+
+func (m *MockExecutor) execute() {
+	m.count++
 }
