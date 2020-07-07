@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -50,7 +51,7 @@ func getHttpInterval() *Timer {
 		},
 		scheduler: interval{
 			start:      time.Unix(0, 0).UTC(),
-			interval:   100,
+			interval:   2,
 			executions: 10,
 		},
 	}
@@ -73,10 +74,23 @@ func TestProto(t *testing.T) {
 	}
 }
 
-type MockExecutor struct {
-	count int
-}
+func TestTest(t *testing.T) {
+	timer := getHttpInterval()
+	interva := timer.scheduler.(interval)
+	interva.start = time.Now().Add(time.Second * -14)
+	fmt.Println(time.Now())
+	timer.scheduler = interva
+	updateProgress, stop := timer.Work()
 
-func (m *MockExecutor) execute() {
-	m.count++
+	for i := 0; i < 2; i++ {
+		_, more := <-updateProgress
+		if !more {
+			fmt.Println("timer completed on its own")
+			break
+		}
+		fmt.Println(timer.progress)
+	}
+
+	stop <- 0
+
 }

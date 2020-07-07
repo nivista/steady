@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// cron is a schedule configured by a cron string.
 type cron struct {
 	start      time.Time
 	executions int

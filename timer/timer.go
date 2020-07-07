@@ -12,19 +12,19 @@ import (
 // Timer definition
 type (
 	Timer struct {
-		progress progress
-		meta     meta
-		executer
-		scheduler
-	}
-
-	meta struct {
-		creationTime time.Time
+		progress  progress
+		meta      meta
+		executer  executer
+		scheduler scheduler
 	}
 
 	progress struct {
 		completed int
 		skipped   int
+	}
+
+	meta struct {
+		creationTime time.Time
 	}
 
 	executer interface {
@@ -38,12 +38,12 @@ type (
 	}
 )
 
-// Work returns a channel that counts the number of times progress was updated, as well as a stop channel.
-func (t *Timer) Work() (updateProgress chan<- int, stop <-chan int) {
-	updateProgress = make(chan int)
-	stop = make(chan int)
-	go t.schedule(&t.progress, t.executer, updateProgress, stop)
-	return
+// Work returns a channel that gets sent a 0 whenever progress is updated, as well as a stop channel.
+func (t *Timer) Work() (<-chan int, chan<- int) {
+	updateProgress := make(chan int)
+	stop := make(chan int)
+	go t.scheduler.schedule(&t.progress, t.executer, updateProgress, stop)
+	return updateProgress, stop
 }
 
 // ToMessageProto creates a messaging.Timer from this Timer.
