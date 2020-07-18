@@ -2,10 +2,15 @@ package timer
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
+	"github.com/Shopify/sarama"
+	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -38,6 +43,75 @@ type (
 		toProto() *common.Schedule
 	}
 )
+
+// Context manages the goroutines created by work from a group of timers.
+type (
+	Context interface {
+		Cancel()
+		done() <-chan struct{}
+	}
+
+	context struct {
+		ch  chan struct{}
+		mux sync.Mutex
+	}
+)
+
+// NewContext returns an initialized timerContext.
+func NewContext() Context {
+	return &context{ch: make(chan struct{})}
+}
+
+func (w *context) Cancel() {
+	w.mux.Lock()
+	defer w.mux.Unlock()
+
+	select {
+	case <-w.ch:
+	default:
+		close(w.ch)
+	}
+}
+
+func (w *context) done() <-chan struct{} {
+	return w.ch
+}
+
+// Run starts the timers execution
+func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock clockwork.Clock) {
+
+	pb := t.ToMessageProto()
+
+	for {
+		nextFire, skips, done := t.scheduler.schedule(t.progress, clock.Now())
+
+		if done {
+			return
+		}
+
+		pb.Progress.Skipped += int32(skips)
+
+		select {
+		case <-clock.After(nextFire.Sub(clock.Now())):
+			t.executer.execute()
+			pb.Progress.Completed++
+
+			val, err := proto.Marshal(pb)
+			if err != nil {
+				panic(fmt.Sprint("timer Run :", err))
+			}
+
+			consumer <- &sarama.ProducerMessage{
+				Topic: "timer",
+				Key:   sarama.ByteEncoder(t.id),
+				Value: sarama.ByteEncoder(val),
+			}
+
+		case <-ctx.done():
+			return
+		}
+	}
+}
 
 // ToMessageProto creates a messaging.Timer from this Timer.
 func (t *Timer) ToMessageProto() *messaging.Timer {
