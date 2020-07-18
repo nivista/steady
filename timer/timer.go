@@ -2,16 +2,22 @@ package timer
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
+	"github.com/Shopify/sarama"
+	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Timer definition
 type (
 	Timer struct {
+		id        []byte
 		progress  progress
 		meta      meta
 		executer  executer
@@ -33,17 +39,78 @@ type (
 	}
 
 	scheduler interface {
-		schedule(progress *progress, task executer, updateProgress chan<- int, stop <-chan int)
+		schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool)
 		toProto() *common.Schedule
 	}
 )
 
-// Work returns a channel that gets sent a 0 whenever progress is updated, as well as a stop channel.
-func (t *Timer) Work() (<-chan int, chan<- int) {
-	updateProgress := make(chan int)
-	stop := make(chan int)
-	go t.scheduler.schedule(&t.progress, t.executer, updateProgress, stop)
-	return updateProgress, stop
+// Context manages the goroutines created by work from a group of timers.
+type (
+	Context interface {
+		Cancel()
+		done() <-chan struct{}
+	}
+
+	context struct {
+		ch  chan struct{}
+		mux sync.Mutex
+	}
+)
+
+// NewContext returns an initialized timerContext.
+func NewContext() Context {
+	return &context{ch: make(chan struct{})}
+}
+
+func (w *context) Cancel() {
+	w.mux.Lock()
+	defer w.mux.Unlock()
+
+	select {
+	case <-w.ch:
+	default:
+		close(w.ch)
+	}
+}
+
+func (w *context) done() <-chan struct{} {
+	return w.ch
+}
+
+// Run starts the timers execution
+func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock clockwork.Clock) {
+
+	pb := t.ToMessageProto()
+
+	for {
+		nextFire, skips, done := t.scheduler.schedule(t.progress, clock.Now())
+
+		if done {
+			return
+		}
+
+		pb.Progress.Skipped += int32(skips)
+
+		select {
+		case <-clock.After(nextFire.Sub(clock.Now())):
+			t.executer.execute()
+			pb.Progress.Completed++
+
+			val, err := proto.Marshal(pb)
+			if err != nil {
+				panic(fmt.Sprint("timer Run :", err))
+			}
+
+			consumer <- &sarama.ProducerMessage{
+				Topic: "timer",
+				Key:   sarama.ByteEncoder(t.id),
+				Value: sarama.ByteEncoder(val),
+			}
+
+		case <-ctx.done():
+			return
+		}
+	}
 }
 
 // ToMessageProto creates a messaging.Timer from this Timer.
@@ -57,8 +124,8 @@ func (t *Timer) ToMessageProto() *messaging.Timer {
 }
 
 // FromMessageProto gets a Timer from a messaging.Timer.
-func (t *Timer) FromMessageProto(p *messaging.Timer) error {
-	newT := Timer{}
+func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
+	newT := Timer{id: id}
 	newT.meta = meta{creationTime: p.Meta.CreateTime.AsTime()}
 	newT.progress = progress{completed: int(p.Progress.Completed), skipped: int(p.Progress.Skipped)}
 

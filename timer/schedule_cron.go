@@ -19,49 +19,50 @@ type cron struct {
 	min, hour, dayOfMonth, month, dayOfWeek int
 }
 
-var monthLengths = []int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+var monthLengths = [12]int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
-func (c cron) schedule(progress *progress, task executer, updateProgress chan<- int, stop <-chan int) {
-	nextFire := c.helper(progress, task, updateProgress)
-
-	select {
-	case <-stop:
-	case <-time.NewTimer(time.Until(nextFire)).C:
-		nextFire = c.helper(progress, task, updateProgress)
+func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool) {
+	if c.executions != -1 && prog.completed >= c.executions {
+		done = true
+		return
 	}
-}
 
-func (c cron) helper(progress *progress, task executer, updateProgress chan<- int) time.Time {
-	nextFire := c.start
-	passedFireTimes := progress.completed + progress.skipped
-	for i := 0; i < passedFireTimes; i++ {
+	nextFire = c.start
+
+	// a fire time is a time when a timer was supposed to fire.
+	// a fire time is said to be satisfied if it has been completed or skipped.
+	fireTimesSatisfied := prog.completed + prog.skipped
+
+	// advance until nextFire has passed the last satisfied fire time
+	for i := 0; i <= fireTimesSatisfied; i++ {
 		if i > 0 {
+			// nextClosestFireTime won't advance if nextFire is "on" a valid fire time
 			nextFire = nextFire.Add(time.Minute)
 		}
-		nextFire = c.advance(nextFire)
+		nextFire = c.nextClosestFireTime(nextFire)
 	}
 
-	diff := time.Now().Sub(nextFire)
-	if diff < 0 {
-		task.execute()
-
-		progress.completed++
-		updateProgress <- 0
-
-		nextFire = c.advance(nextFire)
-
-		for diff < 0 {
-			progress.skipped++
-			updateProgress <- 0
-
-			nextFire = nextFire.Add(time.Minute)
-			nextFire = c.advance(nextFire)
-		}
+	// nextFire is in the present or future
+	if !now.After(nextFire) {
+		return
 	}
-	return nextFire
+
+	// count how many unsatisfied fire times there are between the last satisfied fire time and the present (not inclusive)
+	fireTimesNotSatisfied := 0
+	for now.After(nextFire) {
+		nextFire = nextFire.Add(time.Minute)
+		nextFire = c.nextClosestFireTime(nextFire)
+		fireTimesNotSatisfied++
+	}
+
+	// compensate for one missed fire
+	nextFire = now
+	skips = fireTimesNotSatisfied - 1
+	return
 }
 
-func (c cron) advance(t time.Time) time.Time {
+// nextClosestFireTime finds the nearest valid fire time based on cron schedule after or equal to t
+func (c cron) nextClosestFireTime(t time.Time) time.Time {
 	res := t
 
 	if c.min != -1 {
@@ -110,14 +111,6 @@ func (c cron) advance(t time.Time) time.Time {
 	return res
 }
 
-type cronParseError struct {
-	description string
-}
-
-func (err cronParseError) Error() string {
-	return err.description
-}
-
 func (c *cron) parseCron(cronString string) error {
 	cronStrings := strings.Split(cronString, " ")
 
@@ -129,11 +122,18 @@ func (c *cron) parseCron(cronString string) error {
 
 	c.min = parser.parse(cronStrings[0], "minute", 0, 59)
 	c.hour = parser.parse(cronStrings[1], "hour", 0, 23)
-	c.dayOfMonth = parser.parse(cronStrings[2], "day of month", 1, 31)
 	c.month = parser.parse(cronStrings[3], "month", 0, 11)
-	c.dayOfWeek = parser.parse(cronStrings[4], "day of week", 0, 7)
 
-	return parser.err
+	if c.month != -1 && parser.err == nil {
+		c.dayOfMonth = parser.parse(cronStrings[2], "day of month", 1, monthLengths[c.month])
+		c.dayOfMonth-- // day of month from time package format one-indexed to zero-indexed
+	}
+	c.dayOfWeek = parser.parse(cronStrings[4], "day of week", 0, 6)
+
+	if parser.err != nil {
+		return fmt.Errorf("parseCron: %w", parser.err)
+	}
+	return nil
 }
 
 type cronParser struct {
@@ -175,7 +175,7 @@ func (c cron) validateCron() error {
 }
 
 func (c cron) toProto() *common.Schedule {
-	cronInts := []int{c.min, c.hour, c.dayOfMonth, c.month, c.dayOfWeek}
+	cronInts := []int{c.min, c.hour, c.dayOfMonth + 1, c.month, c.dayOfWeek}
 	cronStrings := make([]string, 5)
 	for idx, val := range cronInts {
 		if val == -1 {
@@ -184,6 +184,7 @@ func (c cron) toProto() *common.Schedule {
 			cronStrings[idx] = strconv.Itoa(val)
 		}
 	}
+
 	cronString := strings.Join(cronStrings, " ")
 
 	return &common.Schedule{
@@ -206,11 +207,11 @@ func (c *cron) fromProto(p *common.Schedule_CronConfig) error {
 	}
 
 	if err := myCron.parseCron(cronConfig.Cron); err != nil {
-		return fmt.Errorf("cron fromProto: %v", err)
+		return fmt.Errorf("cron fromProto: %w", err)
 	}
 
 	if err := myCron.validateCron(); err != nil {
-		return fmt.Errorf("cron fromProto: %v", err)
+		return fmt.Errorf("cron fromProto: %w", err)
 	}
 
 	*c = myCron

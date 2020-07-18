@@ -1,7 +1,6 @@
 package timer
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
@@ -15,72 +14,39 @@ type interval struct {
 	executions int
 }
 
-func (i interval) schedule(progress *progress, task executer, updateProgress chan<- int, stop <-chan int) {
-	defer close(updateProgress)
-
+func (i interval) schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool) {
 	intervalNano := i.interval * 1e9
 
-	if progress.completed >= i.executions {
-		<-stop
+	if i.executions != -1 && prog.completed >= i.executions {
+		done = true
 		return
 	}
-	fmt.Println(time.Now())
-Catchup:
 
-	intervalsAhead := progress.completed + progress.skipped
-	nextFire := i.start.Add(time.Duration(intervalNano * intervalsAhead))
-	diff := time.Now().Sub(nextFire)
-
-	// next fire is in the past
-	if diff > 0 {
-		// fire once now
-		task.execute()
-
-		progress.completed++
-
-		if progress.completed >= i.executions {
-			fmt.Println("here")
-			return
-		}
-
-		select {
-		case <-stop:
-			fmt.Println("stopped while executing")
-			return
-		default:
-			updateProgress <- 0
-		}
-
-		intervalsAhead = progress.completed + progress.skipped
-		nextFire = i.start.Add(time.Duration(intervalNano * intervalsAhead))
-		diff = time.Now().Sub(nextFire)
-
-		// for every other missed fire just skip
-		for diff > 0 {
-			fmt.Println("skipping")
-			progress.skipped++
-
-			select {
-			case <-stop:
-				fmt.Println("stopped while skipping")
-				return
-			default:
-				updateProgress <- 0
-				fmt.Println("skipping2")
-
-			}
-
-			intervalsAhead = progress.completed + progress.skipped
-			nextFire = i.start.Add(time.Duration(intervalNano * intervalsAhead))
-			diff = time.Now().Sub(nextFire)
-		}
+	timePassed := now.Sub(i.start)
+	if timePassed < 0 {
+		nextFire = i.start
+		return
 	}
-	fmt.Println(nextFire)
 
-	t := <-time.NewTimer(time.Until(nextFire)).C
-	fmt.Println(t)
-	goto Catchup
+	// An executionPoint is a time when a timer was supposed to fire.
+	// An executionPoint is said to be satisfied when it is completed or skipped.
+	fireTimesSatisfied := prog.completed + prog.skipped
 
+	// All execution points in the past
+	fireTimesPassed := int(timePassed)/intervalNano + 1
+
+	fireTimesNotSatisfied := fireTimesPassed - fireTimesSatisfied
+
+	// We are after executions that have not been completed or skipped. Fire once now and record all the other missed executions as skipped.
+	if fireTimesNotSatisfied >= 1 {
+		skips = fireTimesNotSatisfied - 1
+		nextFire = now
+		return
+	}
+
+	// The next executions that have not been completed or skipped are in the future
+	nextFire = i.start.Add(time.Duration(intervalNano * fireTimesSatisfied))
+	return
 }
 
 func (i interval) toProto() *common.Schedule {
