@@ -22,8 +22,8 @@ message Meta {
 }
 
 message Progress {
-    int32 completed = 1;
-    int32 skipped = 2;
+    int32 completedExecutions = 1;
+    int32 lastExecution = 2;
 }
 
 enum Method {

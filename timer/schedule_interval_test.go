@@ -7,12 +7,12 @@ import (
 
 func TestIntervalSchedule(t *testing.T) {
 	type testCase struct {
-		interval         interval
-		progress         progress
-		time             time.Time
-		expectedNextFire time.Time
-		expectedSkips    int
-		expectedDone     bool
+		interval                interval
+		progress                progress
+		time                    time.Time
+		expectedNextFire        time.Time
+		expectedExecutionNumber int
+		expectedDone            bool
 	}
 
 	testCases := []testCase{
@@ -22,11 +22,11 @@ func TestIntervalSchedule(t *testing.T) {
 				interval:   10,
 				executions: 4,
 			},
-			progress:         progress{skipped: 1},
-			time:             time.Unix(0, 0),
-			expectedNextFire: time.Unix(10, 0),
-			expectedSkips:    0,
-			expectedDone:     false,
+			progress:                progress{lastExecution: 1},
+			time:                    time.Unix(0, 0),
+			expectedNextFire:        time.Unix(10, 0),
+			expectedExecutionNumber: 2,
+			expectedDone:            false,
 		},
 		{
 			interval: interval{
@@ -35,8 +35,8 @@ func TestIntervalSchedule(t *testing.T) {
 				executions: 4,
 			},
 			progress: progress{
-				skipped:   1,
-				completed: 4,
+				lastExecution:       5,
+				completedExecutions: 4,
 			},
 			time:         time.Unix(0, 0),
 			expectedDone: true,
@@ -48,11 +48,12 @@ func TestIntervalSchedule(t *testing.T) {
 				executions: 4,
 			},
 			progress: progress{
-				skipped:   2,
-				completed: 3,
+				lastExecution:       5,
+				completedExecutions: 3,
 			},
-			time:             time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
-			expectedNextFire: time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
+			time:                    time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
+			expectedNextFire:        time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
+			expectedExecutionNumber: 6,
 		},
 		{
 			interval: interval{
@@ -61,12 +62,12 @@ func TestIntervalSchedule(t *testing.T) {
 				executions: -1,
 			},
 			progress: progress{
-				skipped:   2,
-				completed: 30,
+				lastExecution:       32,
+				completedExecutions: 30,
 			},
-			time:             time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
-			expectedSkips:    3,
+			time:                    time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
+			expectedExecutionNumber: 36,
 		},
 		{
 			interval: interval{
@@ -75,22 +76,23 @@ func TestIntervalSchedule(t *testing.T) {
 				executions: -1,
 			},
 			progress: progress{
-				skipped:   2,
-				completed: 30,
+				lastExecution:       32,
+				completedExecutions: 30,
 			},
-			time:             time.Date(2012, time.March, 20, 0, 30, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2012, time.March, 20, 0, 32, 0, 0, time.UTC),
+			time:                    time.Date(2012, time.March, 20, 0, 30, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2012, time.March, 20, 0, 32, 0, 0, time.UTC),
+			expectedExecutionNumber: 33,
 		},
 	}
 
 	for idx, test := range testCases {
-		nextFire, skips, done := test.interval.schedule(test.progress, test.time)
+		nextFire, executionNumber, done := test.interval.schedule(test.progress, test.time)
 		if done != test.expectedDone {
 			t.Errorf("test at idx %v: expected '%v' for done, got '%v'", idx, test.expectedDone, done)
 		}
 
-		if skips != test.expectedSkips {
-			t.Errorf("test at idx %v: expected '%v' for skips, got '%v'", idx, test.expectedSkips, skips)
+		if executionNumber != test.expectedExecutionNumber {
+			t.Errorf("test at idx %v: expected '%v' for skips, got '%v'", idx, test.expectedExecutionNumber, executionNumber)
 		}
 
 		if nextFire != test.expectedNextFire {

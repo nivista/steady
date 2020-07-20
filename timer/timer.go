@@ -25,8 +25,8 @@ type (
 	}
 
 	progress struct {
-		completed int
-		skipped   int
+		completedExecutions int
+		lastExecution       int
 	}
 
 	meta struct {
@@ -39,7 +39,7 @@ type (
 	}
 
 	scheduler interface {
-		schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool)
+		schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool)
 		toProto() *common.Schedule
 	}
 )
@@ -83,18 +83,17 @@ func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock 
 	pb := t.ToMessageProto()
 
 	for {
-		nextFire, skips, done := t.scheduler.schedule(t.progress, clock.Now())
+		nextFire, executionNumber, done := t.scheduler.schedule(t.progress, clock.Now())
 
 		if done {
 			return
 		}
 
-		pb.Progress.Skipped += int32(skips)
-
 		select {
 		case <-clock.After(nextFire.Sub(clock.Now())):
 			t.executer.execute()
-			pb.Progress.Completed++
+			pb.Progress.LastExecution = int32(executionNumber)
+			pb.Progress.CompletedExecutions++
 
 			val, err := proto.Marshal(pb)
 			if err != nil {
@@ -117,7 +116,12 @@ func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock 
 func (t *Timer) ToMessageProto() *messaging.Timer {
 	p := messaging.Timer{}
 	p.Meta = &common.Meta{CreateTime: timestamppb.New(t.meta.creationTime)}
-	p.Progress = &common.Progress{Completed: int32(t.progress.completed), Skipped: int32(t.progress.skipped)}
+
+	p.Progress = &common.Progress{
+		CompletedExecutions: int32(t.progress.completedExecutions),
+		LastExecution:       int32(t.progress.lastExecution),
+	}
+
 	p.Task = t.executer.toProto()
 	p.Schedule = t.scheduler.toProto()
 	return &p
@@ -127,7 +131,11 @@ func (t *Timer) ToMessageProto() *messaging.Timer {
 func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
 	newT := Timer{id: id}
 	newT.meta = meta{creationTime: p.Meta.CreateTime.AsTime()}
-	newT.progress = progress{completed: int(p.Progress.Completed), skipped: int(p.Progress.Skipped)}
+
+	newT.progress = progress{
+		completedExecutions: int(p.Progress.CompletedExecutions),
+		lastExecution:       int(p.Progress.LastExecution),
+	}
 
 	switch task := p.Task.Task.(type) {
 	case *common.Task_HttpConfig:

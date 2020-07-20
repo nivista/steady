@@ -18,8 +18,8 @@ func TestTimerProto(t *testing.T) {
 				creationTime: time.Unix(1, 2).UTC(), // strip location, we lose this in protos
 			},
 			progress: progress{
-				completed: 5,
-				skipped:   1,
+				completedExecutions: 5,
+				lastExecution:       1,
 			},
 			executer: http{
 				method:  GET,
@@ -43,8 +43,8 @@ func TestTimerProto(t *testing.T) {
 				creationTime: time.Unix(1, 2).UTC(),
 			},
 			progress: progress{
-				completed: 5,
-				skipped:   1,
+				completedExecutions: 5,
+				lastExecution:       1,
 			},
 			executer: http{
 				method:  GET,

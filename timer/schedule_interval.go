@@ -14,38 +14,28 @@ type interval struct {
 	executions int
 }
 
-func (i interval) schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool) {
+func (i interval) schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
 	intervalNano := i.interval * 1e9
 
-	if i.executions != -1 && prog.completed >= i.executions {
+	if i.executions != -1 && prog.completedExecutions >= i.executions {
 		done = true
 		return
 	}
 
-	timePassed := now.Sub(i.start)
-	if timePassed < 0 {
-		nextFire = i.start
+	// lastExecution is one indexed. lastExecution == 0 means we haven't fired, so nextFire should be i.start.
+	nextFire = i.start.Add(time.Duration(intervalNano * prog.lastExecution))
+
+	// nextFire > now  // do i want >= ?
+	if nextFire.After(now) {
+		executionNumber = prog.lastExecution + 1
 		return
 	}
 
-	// An executionPoint is a time when a timer was supposed to fire.
-	// An executionPoint is said to be satisfied when it is completed or skipped.
-	fireTimesSatisfied := prog.completed + prog.skipped
+	// how many timer fires are between the "ideal nextFire" and now (half-open (nextFire, now] )
+	skippedExecutions := int(now.Sub(nextFire)) / intervalNano
 
-	// All execution points in the past
-	fireTimesPassed := int(timePassed)/intervalNano + 1
-
-	fireTimesNotSatisfied := fireTimesPassed - fireTimesSatisfied
-
-	// We are after executions that have not been completed or skipped. Fire once now and record all the other missed executions as skipped.
-	if fireTimesNotSatisfied >= 1 {
-		skips = fireTimesNotSatisfied - 1
-		nextFire = now
-		return
-	}
-
-	// The next executions that have not been completed or skipped are in the future
-	nextFire = i.start.Add(time.Duration(intervalNano * fireTimesSatisfied))
+	executionNumber = prog.lastExecution + skippedExecutions + 1
+	nextFire = now
 	return
 }
 

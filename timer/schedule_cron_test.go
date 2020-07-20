@@ -49,8 +49,8 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   10,
+				completedExecutions: 10,
+				lastExecution:       10,
 			},
 			time:             time.Date(2000, time.January, 20, 0, 0, 0, 0, time.UTC),
 			expectedNextFire: time.Date(2000, time.January, 20, 11, 0, 0, 0, time.UTC),
@@ -58,8 +58,8 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   10,
+				completedExecutions: 20,
+				lastExecution:       30,
 			},
 			time:             time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
 			expectedNextFire: time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
@@ -68,8 +68,8 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   22,
+				completedExecutions: 20,
+				lastExecution:       22,
 			},
 			time:             time.Date(2000, time.January, 0, 0, 0, 0, 0, time.UTC),
 			expectedNextFire: time.Date(2000, time.February, 1, 11, 0, 0, 0, time.UTC),
@@ -83,7 +83,8 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: sundaysEveryHour,
 			progress: progress{
-				completed: 1,
+				lastExecution:       1,
+				completedExecutions: 1,
 			},
 			time:             time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
 			expectedNextFire: time.Date(2020, time.July, 19, 1, 0, 0, 0, time.UTC),
@@ -91,7 +92,7 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: sundaysEveryHour,
 			progress: progress{
-				completed: 24,
+				completedExecutions: 24,
 			},
 			time:             time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
 			expectedNextFire: time.Date(2020, time.July, 26, 0, 0, 0, 0, time.UTC),
@@ -99,14 +100,14 @@ func TestCronSchedule(t *testing.T) {
 		{
 			cron: startOfEachMonth,
 			progress: progress{
-				completed: 10,
+				completedExecutions: 10,
 			},
 			expectedDone: true,
 		},
 		{
 			cron: startOfEachMonth,
 			progress: progress{
-				completed: 9,
+				completedExecutions: 9,
 			},
 			expectedDone:     false,
 			time:             time.Date(2010, time.April, 1, 0, 0, 0, 0, time.UTC),

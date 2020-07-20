@@ -21,20 +21,16 @@ type cron struct {
 
 var monthLengths = [12]int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
-func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, skips int, done bool) {
-	if c.executions != -1 && prog.completed >= c.executions {
+func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
+	if c.executions != -1 && prog.completedExecutions >= c.executions {
 		done = true
 		return
 	}
 
 	nextFire = c.start
 
-	// a fire time is a time when a timer was supposed to fire.
-	// a fire time is said to be satisfied if it has been completed or skipped.
-	fireTimesSatisfied := prog.completed + prog.skipped
-
-	// advance until nextFire has passed the last satisfied fire time
-	for i := 0; i <= fireTimesSatisfied; i++ {
+	// advance until nextFire has passed the lastExecution
+	for i := 0; i <= prog.lastExecution; i++ {
 		if i > 0 {
 			// nextClosestFireTime won't advance if nextFire is "on" a valid fire time
 			nextFire = nextFire.Add(time.Minute)
@@ -42,22 +38,22 @@ func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, skips 
 		nextFire = c.nextClosestFireTime(nextFire)
 	}
 
-	// nextFire is in the present or future
-	if !now.After(nextFire) {
+	// !(now < nextFire) --> now >= nextFire
+	if !now.Before(nextFire) {
+		executionNumber = prog.lastExecution + 1
 		return
 	}
+	// er if nextFire == now
 
-	// count how many unsatisfied fire times there are between the last satisfied fire time and the present (not inclusive)
-	fireTimesNotSatisfied := 0
-	for now.After(nextFire) {
+	executionNumber = prog.lastExecution
+	// advance until now >= nextFire (ie. nextFire is in the present or future)
+	for now.Before(nextFire) {
 		nextFire = nextFire.Add(time.Minute)
 		nextFire = c.nextClosestFireTime(nextFire)
-		fireTimesNotSatisfied++
+		executionNumber++
 	}
-
-	// compensate for one missed fire
 	nextFire = now
-	skips = fireTimesNotSatisfied - 1
+
 	return
 }
 
