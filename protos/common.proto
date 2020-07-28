@@ -38,14 +38,19 @@ message HTTPConfig {
     map<string, string> headers = 4;
 }
 
+enum Executions {
+    NONE = 0;
+    INFINITE = -1;
+}
+
 message IntervalConfig {
     google.protobuf.Timestamp start_time = 1;
     int32 interval = 2;
-    sint32 executions = 3;
+    Executions executions = 3;
 }
 
 message CronConfig {
     google.protobuf.Timestamp start_time = 1;
     string cron = 2;
-    sint32 executions = 3;
+    Executions executions = 3;
 }
