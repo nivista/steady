@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+import "protos/common.proto";
+
+option go_package = "github.com/nivista/steady/.gen/protos/services";
+
+service Steady {
+    rpc CreateTimer (CreateTimerRequest) returns (CreateTimerResponse) {}
+
+    rpc DeleteTimer (DeleteTimerRequest) returns (DeleteTimerResponse) {}
+
+    rpc GetTimer (GetTimerRequest) returns (GetTimerResponse) {}
+}
+
+message CreateTimerRequest {
+    string domain = 1;
+    Task task = 2;
+    Schedule schedule = 3;
+}
+
+message CreateTimerResponse {
+    string timer_uuid = 1;
+}
+
+message DeleteTimerRequest {
+    string domain = 1;
+    string timer_uuid = 2;
+}
+
+message DeleteTimerResponse {}
+
+message GetTimerRequest {
+    string domain = 1;
+    string timer_uuid = 2;
+}
+
+message GetTimerResponse {
+    string timer_uuid = 1;
+    Task task = 2;
+    Schedule schedule = 3;
+    Meta meta = 4;
+    Progress progress = 5;
+}
