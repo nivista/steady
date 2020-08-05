@@ -51,9 +51,9 @@ func TestIntervalSchedule(t *testing.T) {
 				lastExecution:       5,
 				completedExecutions: 3,
 			},
+			expectedExecutionNumber: 6,
 			time:                    time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
 			expectedNextFire:        time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
-			expectedExecutionNumber: 6,
 		},
 		{
 			interval: interval{
@@ -79,9 +79,9 @@ func TestIntervalSchedule(t *testing.T) {
 				lastExecution:       32,
 				completedExecutions: 30,
 			},
+			expectedExecutionNumber: 33,
 			time:                    time.Date(2012, time.March, 20, 0, 30, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2012, time.March, 20, 0, 32, 0, 0, time.UTC),
-			expectedExecutionNumber: 33,
 		},
 	}
 
@@ -92,7 +92,7 @@ func TestIntervalSchedule(t *testing.T) {
 		}
 
 		if executionNumber != test.expectedExecutionNumber {
-			t.Errorf("test at idx %v: expected '%v' for skips, got '%v'", idx, test.expectedExecutionNumber, executionNumber)
+			t.Errorf("test at idx %v: expected '%v' for executionNumber, got '%v'", idx, test.expectedExecutionNumber, executionNumber)
 		}
 
 		if nextFire != test.expectedNextFire {

@@ -22,38 +22,36 @@ type cron struct {
 var monthLengths = [12]int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
 func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
-	if c.executions != -1 && prog.completedExecutions >= c.executions {
+	if c.executions != InfiniteExecutions && prog.completedExecutions >= c.executions {
 		done = true
 		return
 	}
 
 	nextFire = c.start
 
-	// advance until nextFire has passed the lastExecution
-	for i := 0; i <= prog.lastExecution; i++ {
+	for i := 0; i < prog.lastExecution+1; i++ {
 		if i > 0 {
-			// nextClosestFireTime won't advance if nextFire is "on" a valid fire time
+			// nextClosestFireTime won't advance if nextFire is equal to a valid fire time
 			nextFire = nextFire.Add(time.Minute)
 		}
 		nextFire = c.nextClosestFireTime(nextFire)
 	}
 
-	// !(now < nextFire) --> now >= nextFire
-	if !now.Before(nextFire) {
-		executionNumber = prog.lastExecution + 1
+	// next execution is in past
+	if now.After(nextFire) {
+		executionNumber = prog.lastExecution
+
+		// find out how many times nextFire has to advance to be in the present or future
+		for now.After(nextFire) {
+			nextFire = nextFire.Add(time.Minute)
+			nextFire = c.nextClosestFireTime(nextFire)
+			executionNumber++
+		}
+		nextFire = now
 		return
 	}
-	// er if nextFire == now
 
-	executionNumber = prog.lastExecution
-	// advance until now >= nextFire (ie. nextFire is in the present or future)
-	for now.Before(nextFire) {
-		nextFire = nextFire.Add(time.Minute)
-		nextFire = c.nextClosestFireTime(nextFire)
-		executionNumber++
-	}
-	nextFire = now
-
+	executionNumber = prog.lastExecution + 1
 	return
 }
 
@@ -188,7 +186,7 @@ func (c cron) toProto() *common.Schedule {
 			CronConfig: &common.CronConfig{
 				StartTime:  timestamppb.New(c.start),
 				Cron:       cronString,
-				Executions: int32(c.executions),
+				Executions: common.Executions(c.executions),
 			},
 		},
 	}

@@ -44,6 +44,9 @@ type (
 	}
 )
 
+// InfiniteExecutions indicates a timer should fire until cancelled.
+const InfiniteExecutions = 0
+
 // Context manages the goroutines created by work from a group of timers.
 type (
 	Context interface {
@@ -86,14 +89,21 @@ func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock 
 		nextFire, executionNumber, done := t.scheduler.schedule(t.progress, clock.Now())
 
 		if done {
+			consumer <- &sarama.ProducerMessage{
+				Topic: "timer",
+				Key:   sarama.ByteEncoder(t.id),
+				Value: nil,
+			}
 			return
 		}
+
+		pb.Progress.LastExecution += int32(executionNumber)
 
 		select {
 		case <-clock.After(nextFire.Sub(clock.Now())):
 			t.executer.execute()
-			pb.Progress.LastExecution = int32(executionNumber)
 			pb.Progress.CompletedExecutions++
+			pb.Progress.LastExecution++
 
 			val, err := proto.Marshal(pb)
 			if err != nil {
@@ -116,12 +126,10 @@ func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock 
 func (t *Timer) ToMessageProto() *messaging.Timer {
 	p := messaging.Timer{}
 	p.Meta = &common.Meta{CreateTime: timestamppb.New(t.meta.creationTime)}
-
 	p.Progress = &common.Progress{
 		CompletedExecutions: int32(t.progress.completedExecutions),
 		LastExecution:       int32(t.progress.lastExecution),
 	}
-
 	p.Task = t.executer.toProto()
 	p.Schedule = t.scheduler.toProto()
 	return &p
@@ -131,7 +139,6 @@ func (t *Timer) ToMessageProto() *messaging.Timer {
 func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
 	newT := Timer{id: id}
 	newT.meta = meta{creationTime: p.Meta.CreateTime.AsTime()}
-
 	newT.progress = progress{
 		completedExecutions: int(p.Progress.CompletedExecutions),
 		lastExecution:       int(p.Progress.LastExecution),

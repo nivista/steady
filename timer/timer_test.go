@@ -19,7 +19,7 @@ func TestTimerProto(t *testing.T) {
 			},
 			progress: progress{
 				completedExecutions: 5,
-				lastExecution:       1,
+				lastExecution:       5,
 			},
 			executer: http{
 				method:  GET,
@@ -44,7 +44,7 @@ func TestTimerProto(t *testing.T) {
 			},
 			progress: progress{
 				completedExecutions: 5,
-				lastExecution:       1,
+				lastExecution:       6,
 			},
 			executer: http{
 				method:  GET,
@@ -88,14 +88,13 @@ func (m *mockExecuter) toProto() *common.Task {
 
 type mockScheduler struct {
 	nextFires []time.Time
-	skips     []int
 	dones     []bool
 	nextIdx   int
 }
 
-func (m *mockScheduler) schedule(progress, time.Time) (nextFire time.Time, skips int, done bool) {
+func (m *mockScheduler) schedule(progress, time.Time) (nextFire time.Time, executionNumber int, done bool) {
 	i := m.nextIdx
-	nextFire, skips, done = m.nextFires[i], m.skips[i], m.dones[i]
+	nextFire, executionNumber, done = m.nextFires[i], 0, m.dones[i]
 	m.nextIdx++
 	return
 }
@@ -121,7 +120,6 @@ func TestRun(t *testing.T) {
 					time.Date(2000, time.January, 6, 0, 0, 0, 0, time.UTC),
 					time.Date(2000, time.January, 9, 0, 0, 0, 0, time.UTC), // this is after ctx will be cancelled
 				},
-				skips: []int{3, 0, 0, 0},
 				dones: []bool{false, false, false, false},
 			},
 		},
@@ -135,7 +133,6 @@ func TestRun(t *testing.T) {
 					time.Date(2000, time.January, 5, 0, 0, 0, 0, time.UTC),
 					time.Date(2000, time.January, 9, 0, 0, 0, 0, time.UTC), // this is after ctx will be cancelled
 				},
-				skips: []int{3, 0, 0, 0},
 				dones: []bool{false, false, false, false},
 			},
 		}, {
@@ -147,7 +144,6 @@ func TestRun(t *testing.T) {
 					time.Date(2000, time.January, 4, 0, 0, 0, 0, time.UTC),
 					{}, // <-- zero value
 				},
-				skips: []int{3, 0, 0},
 				dones: []bool{false, false, true},
 			},
 		}}
@@ -179,43 +175,58 @@ func TestRun(t *testing.T) {
 		}
 	}
 
+	// December 31st 1999
 	assertProgress([]int{0, 0, 0})
 
 	clock.Advance(time.Hour * 24)
 	<-output
+
+	// January 1st 2000
 	assertProgress([]int{1, 0, 0})
 
 	clock.Advance(time.Hour * 24)
 	<-output
+
+	// January 2nd 2000
 	assertProgress([]int{1, 1, 0})
 
 	clock.Advance(time.Hour * 24)
 	<-output
+
+	// January 3rd 2000
 	assertProgress([]int{1, 1, 1})
 
 	clock.Advance(time.Hour * 24)
 	<-output
 	<-output
+
+	// January 4th 2000
 	assertProgress([]int{2, 2, 1})
 
 	clock.Advance(time.Hour * 24)
 	<-output
+	<-output
+
+	// January 5th 2000
 	assertProgress([]int{2, 2, 2})
-	// at this point one of the goroutines should stop on its own
 
 	clock.Advance(time.Hour * 24)
 	<-output
+
+	// January 6th 2000
 	assertProgress([]int{2, 3, 2})
 
 	clock.Advance(time.Hour * 24)
 	<-output
+
+	// January 7th 2000
 	assertProgress([]int{3, 3, 2})
 
 	go ctx.Cancel()
 	ctx.Cancel() // should get no error doing this twice or concurrently
 
 	clock.Advance(time.Hour * 24 * 2)
-	<-time.After(time.Second * 2) // wait to see if any dangling goroutines send to output
+	<-time.After(time.Second) // wait to see if any dangling goroutines send to output
 
 	select {
 	case <-output:
