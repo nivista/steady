@@ -37,91 +37,100 @@ func TestCronSchedule(t *testing.T) {
 	}
 
 	type testCase struct {
-		cron             cron
-		progress         progress
-		time             time.Time
-		expectedNextFire time.Time
-		expectedSkips    int
-		expectedDone     bool
+		cron                    cron
+		progress                progress
+		time                    time.Time
+		expectedNextFire        time.Time
+		expectedExecutionNumber int
+		expectedDone            bool
 	}
 
 	testCases := []testCase{
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   10,
+				completedExecutions: 10,
+				lastExecution:       20,
 			},
-			time:             time.Date(2000, time.January, 20, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2000, time.January, 20, 11, 0, 0, 0, time.UTC),
+			time:                    time.Date(2000, time.January, 20, 0, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 21,
+			expectedNextFire:        time.Date(2000, time.January, 20, 11, 0, 0, 0, time.UTC),
 		},
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   10,
+				completedExecutions: 10,
+				lastExecution:       20,
 			},
-			time:             time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
-			expectedSkips:    1,
+			time:                    time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 22,
 		},
 		{
 			cron: everyDay,
 			progress: progress{
-				completed: 10,
-				skipped:   22,
+				completedExecutions: 10,
+				lastExecution:       32,
 			},
-			time:             time.Date(2000, time.January, 0, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2000, time.February, 1, 11, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 33,
+			time:                    time.Date(2000, time.January, 0, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2000, time.February, 1, 11, 0, 0, 0, time.UTC),
 		},
 		{
-			cron:             sundaysEveryHour,
-			progress:         progress{},
-			time:             time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2020, time.July, 19, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			cron: sundaysEveryHour,
-			progress: progress{
-				completed: 1,
-			},
-			time:             time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2020, time.July, 19, 1, 0, 0, 0, time.UTC),
+			cron:                    sundaysEveryHour,
+			progress:                progress{},
+			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2020, time.July, 19, 0, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 1,
 		},
 		{
 			cron: sundaysEveryHour,
 			progress: progress{
-				completed: 24,
+				completedExecutions: 1,
+				lastExecution:       1,
 			},
-			time:             time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2020, time.July, 26, 0, 0, 0, 0, time.UTC),
+			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2020, time.July, 19, 1, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 2,
+		},
+		{
+			cron: sundaysEveryHour,
+			progress: progress{
+				completedExecutions: 24,
+				lastExecution:       24,
+			},
+			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2020, time.July, 26, 0, 0, 0, 0, time.UTC),
+			expectedExecutionNumber: 25,
 		},
 		{
 			cron: startOfEachMonth,
 			progress: progress{
-				completed: 10,
+				completedExecutions: 10,
+				lastExecution:       10,
 			},
 			expectedDone: true,
 		},
 		{
 			cron: startOfEachMonth,
 			progress: progress{
-				completed: 9,
+				completedExecutions: 9,
+				lastExecution:       9,
 			},
-			expectedDone:     false,
-			time:             time.Date(2010, time.April, 1, 0, 0, 0, 0, time.UTC),
-			expectedNextFire: time.Date(2011, time.February, 1, 10, 20, 0, 0, time.UTC),
+			expectedExecutionNumber: 10,
+			time:                    time.Date(2010, time.April, 1, 0, 0, 0, 0, time.UTC),
+			expectedNextFire:        time.Date(2011, time.February, 1, 10, 20, 0, 0, time.UTC),
 		},
 	}
 
 	for idx, test := range testCases {
-		nextFire, skips, done := test.cron.schedule(test.progress, test.time)
+		nextFire, executionNumber, done := test.cron.schedule(test.progress, test.time)
 		if done != test.expectedDone {
 			t.Errorf("test at idx %v: expected '%v' for done, got '%v'", idx, test.expectedDone, done)
 		}
 
-		if skips != test.expectedSkips {
-			t.Errorf("test at idx %v: expected '%v' for skips, got '%v'", idx, test.expectedSkips, skips)
+		if executionNumber != test.expectedExecutionNumber {
+			t.Errorf("test at idx %v: expected '%v' for executionNumber, got '%v'", idx, test.expectedExecutionNumber, executionNumber)
 		}
 
 		if nextFire != test.expectedNextFire {
