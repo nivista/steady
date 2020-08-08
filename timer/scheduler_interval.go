@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // interval is a scheduler configured by a fixed interval.
@@ -14,16 +13,16 @@ type interval struct {
 	executions int
 }
 
-func (i interval) schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
-	if i.executions != -1 && prog.completedExecutions >= i.executions {
+func (i interval) schedule(prog Progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
+	if i.executions != InfiniteExecutions && prog.CompletedExecutions >= i.executions {
 		done = true
 		return
 	}
 
 	intervalNano := i.interval * 1e9
 
-	nextFire = i.start.Add(time.Duration(intervalNano * prog.lastExecution))
-	executionNumber = prog.lastExecution + 1
+	nextFire = i.start.Add(time.Duration(intervalNano * prog.LastExecution))
+	executionNumber = prog.LastExecution + 1
 
 	diff := now.Sub(nextFire)
 
@@ -34,18 +33,6 @@ func (i interval) schedule(prog progress, now time.Time) (nextFire time.Time, ex
 	}
 
 	return
-}
-
-func (i interval) toProto() *common.Schedule {
-	return &common.Schedule{
-		Schedule: &common.Schedule_IntervalConfig{
-			IntervalConfig: &common.IntervalConfig{
-				StartTime:  timestamppb.New(i.start),
-				Interval:   int32(i.interval),
-				Executions: common.Executions(i.executions),
-			},
-		},
-	}
 }
 
 func (i *interval) fromProto(p *common.Schedule_IntervalConfig) error {

@@ -1,4 +1,4 @@
-package manager
+package consumer
 
 import (
 	"hash/crc32"
@@ -9,7 +9,7 @@ import (
 )
 
 // ConsistentHash is a sarama.BalanceStrategy implementation with the consistent hashing algorithm.
-type consistentHash int
+type ConsistentHash int
 
 type hashringNode struct {
 	name         string
@@ -40,12 +40,12 @@ func (l hashring) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
-func (c consistentHash) Name() string {
+func (c ConsistentHash) Name() string {
 	return "ConsistentHash"
 }
 
 // Plan to consistently hash partitions.
-func (c consistentHash) Plan(members map[string]sarama.ConsumerGroupMemberMetadata, topics map[string][]int32) (sarama.BalanceStrategyPlan, error) {
+func (c ConsistentHash) Plan(members map[string]sarama.ConsumerGroupMemberMetadata, topics map[string][]int32) (sarama.BalanceStrategyPlan, error) {
 	plan := make(sarama.BalanceStrategyPlan)
 	membersList := make([]string, len(members))
 	i := 0
@@ -101,6 +101,6 @@ func consistentHashTopic(members []string, partitions []int32) map[string][]int3
 	return plan
 }
 
-func (consistentHash) AssignmentData(memberID string, topics map[string][]int32, generationID int32) ([]byte, error) {
+func (ConsistentHash) AssignmentData(memberID string, topics map[string][]int32, generationID int32) ([]byte, error) {
 	return []byte{}, nil
 }

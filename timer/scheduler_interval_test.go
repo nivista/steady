@@ -8,7 +8,7 @@ import (
 func TestIntervalSchedule(t *testing.T) {
 	type testCase struct {
 		interval                interval
-		progress                progress
+		progress                Progress
 		time                    time.Time
 		expectedNextFire        time.Time
 		expectedExecutionNumber int
@@ -22,7 +22,7 @@ func TestIntervalSchedule(t *testing.T) {
 				interval:   10,
 				executions: 4,
 			},
-			progress:                progress{lastExecution: 1},
+			progress:                Progress{LastExecution: 1},
 			time:                    time.Unix(0, 0),
 			expectedNextFire:        time.Unix(10, 0),
 			expectedExecutionNumber: 2,
@@ -34,9 +34,9 @@ func TestIntervalSchedule(t *testing.T) {
 				interval:   10,
 				executions: 4,
 			},
-			progress: progress{
-				lastExecution:       5,
-				completedExecutions: 4,
+			progress: Progress{
+				LastExecution:       5,
+				CompletedExecutions: 4,
 			},
 			time:         time.Unix(0, 0),
 			expectedDone: true,
@@ -47,9 +47,9 @@ func TestIntervalSchedule(t *testing.T) {
 				interval:   100,
 				executions: 4,
 			},
-			progress: progress{
-				lastExecution:       5,
-				completedExecutions: 3,
+			progress: Progress{
+				LastExecution:       5,
+				CompletedExecutions: 3,
 			},
 			expectedExecutionNumber: 6,
 			time:                    time.Date(2012, time.April, 0, 0, 0, 0, 131, time.UTC).Add(600e9),
@@ -59,11 +59,11 @@ func TestIntervalSchedule(t *testing.T) {
 			interval: interval{
 				start:      time.Date(2012, time.March, 20, 0, 0, 0, 0, time.UTC),
 				interval:   60,
-				executions: -1,
+				executions: InfiniteExecutions,
 			},
-			progress: progress{
-				lastExecution:       32,
-				completedExecutions: 30,
+			progress: Progress{
+				LastExecution:       32,
+				CompletedExecutions: 30,
 			},
 			time:                    time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2012, time.March, 20, 0, 35, 0, 0, time.UTC),
@@ -73,11 +73,11 @@ func TestIntervalSchedule(t *testing.T) {
 			interval: interval{
 				start:      time.Date(2012, time.March, 20, 0, 0, 0, 0, time.UTC),
 				interval:   60,
-				executions: -1,
+				executions: InfiniteExecutions,
 			},
-			progress: progress{
-				lastExecution:       32,
-				completedExecutions: 30,
+			progress: Progress{
+				LastExecution:       32,
+				CompletedExecutions: 30,
 			},
 			expectedExecutionNumber: 33,
 			time:                    time.Date(2012, time.March, 20, 0, 30, 0, 0, time.UTC),

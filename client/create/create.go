@@ -6,13 +6,14 @@ import (
 	"log"
 	"time"
 
+	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/.gen/protos/services"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func main() {
-	conn, err := grpc.Dial("localhost:8001", grpc.WithInsecure())
+	conn, err := grpc.Dial("localhost:8080", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("Did not connect: %v", err)
 	}
@@ -21,19 +22,19 @@ func main() {
 
 	req := services.CreateTimerRequest{
 		Domain: "Yaniv",
-		TaskConfig: &services.TaskConfig{
-			TaskConfig: &services.TaskConfig_HttpConfig{
-				HttpConfig: &services.HTTPConfig{
+		Task: &common.Task{
+			Task: &common.Task_HttpConfig{
+				HttpConfig: &common.HTTPConfig{
 					Url:     "www.example.com/bug",
-					Method:  services.Method_GET,
+					Method:  common.Method_GET,
 					Body:    "get requests technically shouldn't have bodies",
 					Headers: map[string]string{"set-cookie": "yum"},
 				},
 			},
 		},
-		ScheduleConfig: &services.ScheduleConfig{
-			ScheduleConfig: &services.ScheduleConfig_IntervalConfig{
-				IntervalConfig: &services.IntervalConfig{
+		Schedule: &common.Schedule{
+			Schedule: &common.Schedule_IntervalConfig{
+				IntervalConfig: &common.IntervalConfig{
 					StartTime:  timestamppb.New(time.Now().UTC()),
 					Interval:   10,
 					Executions: 5,

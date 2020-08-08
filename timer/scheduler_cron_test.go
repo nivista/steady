@@ -38,7 +38,7 @@ func TestCronSchedule(t *testing.T) {
 
 	type testCase struct {
 		cron                    cron
-		progress                progress
+		progress                Progress
 		time                    time.Time
 		expectedNextFire        time.Time
 		expectedExecutionNumber int
@@ -48,9 +48,9 @@ func TestCronSchedule(t *testing.T) {
 	testCases := []testCase{
 		{
 			cron: everyDay,
-			progress: progress{
-				completedExecutions: 10,
-				lastExecution:       20,
+			progress: Progress{
+				CompletedExecutions: 10,
+				LastExecution:       20,
 			},
 			time:                    time.Date(2000, time.January, 20, 0, 0, 0, 0, time.UTC),
 			expectedExecutionNumber: 21,
@@ -58,9 +58,9 @@ func TestCronSchedule(t *testing.T) {
 		},
 		{
 			cron: everyDay,
-			progress: progress{
-				completedExecutions: 10,
-				lastExecution:       20,
+			progress: Progress{
+				CompletedExecutions: 10,
+				LastExecution:       20,
 			},
 			time:                    time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2000, time.January, 22, 0, 0, 0, 0, time.UTC),
@@ -68,9 +68,9 @@ func TestCronSchedule(t *testing.T) {
 		},
 		{
 			cron: everyDay,
-			progress: progress{
-				completedExecutions: 10,
-				lastExecution:       32,
+			progress: Progress{
+				CompletedExecutions: 10,
+				LastExecution:       32,
 			},
 			expectedExecutionNumber: 33,
 			time:                    time.Date(2000, time.January, 0, 0, 0, 0, 0, time.UTC),
@@ -78,16 +78,15 @@ func TestCronSchedule(t *testing.T) {
 		},
 		{
 			cron:                    sundaysEveryHour,
-			progress:                progress{},
 			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2020, time.July, 19, 0, 0, 0, 0, time.UTC),
 			expectedExecutionNumber: 1,
 		},
 		{
 			cron: sundaysEveryHour,
-			progress: progress{
-				completedExecutions: 1,
-				lastExecution:       1,
+			progress: Progress{
+				CompletedExecutions: 1,
+				LastExecution:       1,
 			},
 			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2020, time.July, 19, 1, 0, 0, 0, time.UTC),
@@ -95,9 +94,9 @@ func TestCronSchedule(t *testing.T) {
 		},
 		{
 			cron: sundaysEveryHour,
-			progress: progress{
-				completedExecutions: 24,
-				lastExecution:       24,
+			progress: Progress{
+				CompletedExecutions: 24,
+				LastExecution:       24,
 			},
 			time:                    time.Date(2020, time.July, 15, 0, 0, 0, 0, time.UTC),
 			expectedNextFire:        time.Date(2020, time.July, 26, 0, 0, 0, 0, time.UTC),
@@ -105,17 +104,17 @@ func TestCronSchedule(t *testing.T) {
 		},
 		{
 			cron: startOfEachMonth,
-			progress: progress{
-				completedExecutions: 10,
-				lastExecution:       10,
+			progress: Progress{
+				CompletedExecutions: 10,
+				LastExecution:       10,
 			},
 			expectedDone: true,
 		},
 		{
 			cron: startOfEachMonth,
-			progress: progress{
-				completedExecutions: 9,
-				lastExecution:       9,
+			progress: Progress{
+				CompletedExecutions: 9,
+				LastExecution:       9,
 			},
 			expectedExecutionNumber: 10,
 			time:                    time.Date(2010, time.April, 1, 0, 0, 0, 0, time.UTC),

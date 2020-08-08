@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // cron is a schedule configured by a cron string.
@@ -21,15 +20,15 @@ type cron struct {
 
 var monthLengths = [12]int{31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
 
-func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
-	if c.executions != InfiniteExecutions && prog.completedExecutions >= c.executions {
+func (c cron) schedule(prog Progress, now time.Time) (nextFire time.Time, executionNumber int, done bool) {
+	if c.executions != InfiniteExecutions && prog.CompletedExecutions >= c.executions {
 		done = true
 		return
 	}
 
 	nextFire = c.start
 
-	for i := 0; i < prog.lastExecution+1; i++ {
+	for i := 0; i < prog.LastExecution+1; i++ {
 		if i > 0 {
 			// nextClosestFireTime won't advance if nextFire is equal to a valid fire time
 			nextFire = nextFire.Add(time.Minute)
@@ -39,7 +38,7 @@ func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, execut
 
 	// next execution is in past
 	if now.After(nextFire) {
-		executionNumber = prog.lastExecution
+		executionNumber = prog.LastExecution
 
 		// find out how many times nextFire has to advance to be in the present or future
 		for now.After(nextFire) {
@@ -51,7 +50,7 @@ func (c cron) schedule(prog progress, now time.Time) (nextFire time.Time, execut
 		return
 	}
 
-	executionNumber = prog.lastExecution + 1
+	executionNumber = prog.LastExecution + 1
 	return
 }
 
@@ -166,30 +165,6 @@ func (c cron) validateCron() error {
 	}
 
 	return nil
-}
-
-func (c cron) toProto() *common.Schedule {
-	cronInts := []int{c.min, c.hour, c.dayOfMonth + 1, c.month, c.dayOfWeek}
-	cronStrings := make([]string, 5)
-	for idx, val := range cronInts {
-		if val == -1 {
-			cronStrings[idx] = "*"
-		} else {
-			cronStrings[idx] = strconv.Itoa(val)
-		}
-	}
-
-	cronString := strings.Join(cronStrings, " ")
-
-	return &common.Schedule{
-		Schedule: &common.Schedule_CronConfig{
-			CronConfig: &common.CronConfig{
-				StartTime:  timestamppb.New(c.start),
-				Cron:       cronString,
-				Executions: common.Executions(c.executions),
-			},
-		},
-	}
 }
 
 func (c *cron) fromProto(p *common.Schedule_CronConfig) error {

@@ -31,6 +31,10 @@ enum Method {
     POST = 1;
 }
 
+enum Executions {
+    INFINITE = 0;
+}
+
 message HTTPConfig {
     string url = 1;
     Method method = 2;
@@ -41,11 +45,11 @@ message HTTPConfig {
 message IntervalConfig {
     google.protobuf.Timestamp start_time = 1;
     int32 interval = 2;
-    sint32 executions = 3;
+    Executions executions = 3;
 }
 
 message CronConfig {
     google.protobuf.Timestamp start_time = 1;
     string cron = 2;
-    sint32 executions = 3;
+    Executions executions = 3;
 }

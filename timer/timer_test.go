@@ -1,19 +1,14 @@
 package timer
 
 import (
-	"reflect"
-	"testing"
 	"time"
 
-	"github.com/Shopify/sarama"
-	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 )
 
-func TestTimerProto(t *testing.T) {
+/* func TestTimerProto(t *testing.T) {
 	timers := []*Timer{
 		{
-			id: []byte{1},
 			meta: meta{
 				creationTime: time.Unix(1, 2).UTC(), // strip location, we lose this in protos
 			},
@@ -38,7 +33,6 @@ func TestTimerProto(t *testing.T) {
 			},
 		},
 		{
-			id: []byte{2},
 			meta: meta{
 				creationTime: time.Unix(1, 2).UTC(),
 			},
@@ -61,9 +55,8 @@ func TestTimerProto(t *testing.T) {
 
 	for idx, timer := range timers {
 		proto := timer.ToMessageProto()
-		id := timer.id
 		var timerTwo *Timer = &Timer{}
-		if err := timerTwo.FromMessageProto(proto, id); err != nil {
+		if err := timerTwo.FromMessageProto(proto); err != nil {
 			t.Errorf("FromMessageProto at idx %v failed w/ error: %v\n", idx, err)
 			continue
 		}
@@ -72,14 +65,12 @@ func TestTimerProto(t *testing.T) {
 			t.Errorf("Going to and from proto yielded a different timer at idx %v\n", idx)
 		}
 	}
-}
+} */
 
 type mockExecuter struct {
-	count int
 }
 
 func (m *mockExecuter) execute() {
-	m.count++
 }
 
 func (m *mockExecuter) toProto() *common.Task {
@@ -92,7 +83,7 @@ type mockScheduler struct {
 	nextIdx   int
 }
 
-func (m *mockScheduler) schedule(progress, time.Time) (nextFire time.Time, executionNumber int, done bool) {
+func (m *mockScheduler) schedule(Progress, time.Time) (nextFire time.Time, executionNumber int, done bool) {
 	i := m.nextIdx
 	nextFire, executionNumber, done = m.nextFires[i], 0, m.dones[i]
 	m.nextIdx++
@@ -108,10 +99,11 @@ func (m *mockScheduler) toProto() *common.Schedule {
 // in terms of sequence: a b c ba c* b a **
 // letters refer to timer executions, no spaces mean they fire at exact same time,
 // * means fire then terminate, ** means cancel context.
-func TestRun(t *testing.T) {
+/* func TestRun(t *testing.T) {
+	var executionCounts = [3]int{0, 0, 0}
+	fmt.Println(unsafe.Pointer(&executionCounts))
 	timers := []*Timer{
 		{
-			id:       []byte{1},
 			executer: &mockExecuter{},
 			scheduler: &mockScheduler{
 				nextFires: []time.Time{
@@ -124,7 +116,6 @@ func TestRun(t *testing.T) {
 			},
 		},
 		{
-			id:       []byte{1},
 			executer: &mockExecuter{},
 			scheduler: &mockScheduler{
 				nextFires: []time.Time{
@@ -136,7 +127,6 @@ func TestRun(t *testing.T) {
 				dones: []bool{false, false, false, false},
 			},
 		}, {
-			id:       []byte{1},
 			executer: &mockExecuter{},
 			scheduler: &mockScheduler{
 				nextFires: []time.Time{
@@ -148,89 +138,42 @@ func TestRun(t *testing.T) {
 			},
 		}}
 
-	ctx := NewContext()
 	clock := clockwork.NewFakeClockAt(time.Date(2000, time.January, -1, 0, 0, 0, 0, time.UTC))
-	output := make(chan *sarama.ProducerMessage)
-	for _, timer := range timers {
-		go timer.Run(ctx, output, clock)
+
+	var expectedExecutionCounts = [][3]int{
+		{0, 0, 0},
+		{1, 0, 0},
+		{1, 1, 0},
+		{1, 1, 1},
+		{2, 2, 1},
+		{2, 2, 2},
+		{2, 3, 2},
+		{3, 3, 2},
+		{3, 3, 2},
 	}
 
-	assertProgress := func(expected []int) {
-		actual := []int{}
-		for _, t := range timers {
-			actual = append(actual, t.executer.(*mockExecuter).count)
-		}
+	var (
+		progressUpdates
+		skips
 
-		equal := true
-		if len(actual) != len(expected) {
-			equal = false
-		}
-		for i := 0; equal && i < len(actual); i++ {
-			if expected[i] != actual[i] {
-				equal = false
-			}
-		}
-		if !equal {
-			t.Fatalf("expected progress %v, got %v\n", expected, actual)
-		}
+		expectedProgressUpdates
+		expectedSkips
+	)
+
+	cancellers := make([]Canceller, len(timers))
+	for idx, timer := range timers {
+		cancellers[idx] = timer.Run(func(Progress) {
+
+		}, func() {
+
+		}, Progress{}, clock)
 	}
 
-	// December 31st 1999
-	assertProgress([]int{0, 0, 0})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-
-	// January 1st 2000
-	assertProgress([]int{1, 0, 0})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-
-	// January 2nd 2000
-	assertProgress([]int{1, 1, 0})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-
-	// January 3rd 2000
-	assertProgress([]int{1, 1, 1})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-	<-output
-
-	// January 4th 2000
-	assertProgress([]int{2, 2, 1})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-	<-output
-
-	// January 5th 2000
-	assertProgress([]int{2, 2, 2})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-
-	// January 6th 2000
-	assertProgress([]int{2, 3, 2})
-
-	clock.Advance(time.Hour * 24)
-	<-output
-
-	// January 7th 2000
-	assertProgress([]int{3, 3, 2})
-
-	go ctx.Cancel()
-	ctx.Cancel() // should get no error doing this twice or concurrently
-
-	clock.Advance(time.Hour * 24 * 2)
-	<-time.After(time.Second) // wait to see if any dangling goroutines send to output
-
-	select {
-	case <-output:
-		t.Fatalf("Should not be recieving output after ctx is closed")
-	default:
+	for _, expected := range expectedExecutionCounts {
+		if expected != executionCounts {
+			t.Fatalf("expected for execution counts %v, got %v.\n", expected, executionCounts)
+		}
+		clock.Advance(time.Hour * 24)
 	}
-}
+
+} */

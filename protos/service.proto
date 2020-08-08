@@ -35,9 +35,8 @@ message GetTimerRequest {
 }
 
 message GetTimerResponse {
-    string timer_uuid = 1;
-    Task task = 2;
-    Schedule schedule = 3;
-    Meta meta = 4;
-    Progress progress = 5;
+    Task task = 1;
+    Schedule schedule = 2;
+    Meta meta = 3;
+    Progress progress = 4;
 }

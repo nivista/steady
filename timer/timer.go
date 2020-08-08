@@ -3,146 +3,106 @@ package timer
 import (
 	"errors"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/Shopify/sarama"
 	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// Timer definition
 type (
+	// Timer represents the configuration for the execution of a recurring task.
 	Timer struct {
-		id        []byte
-		progress  progress
-		meta      meta
 		executer  executer
 		scheduler scheduler
 	}
 
-	progress struct {
-		completedExecutions int
-		lastExecution       int
-	}
+	// Progress records the progress of a recurring task.
+	Progress struct {
+		// CompletedExecutions indicated the number of successfully completed executions.
+		CompletedExecutions int
 
-	meta struct {
-		creationTime time.Time
+		// LastExecution indicates which execution was recorded last. It may be greater than CompletedExecutions if a fire
+		// was missed after a long outage. For example there have been 4 successfully completed executions but the last
+		// execution was 5th of the scheduled executions.
+		LastExecution int
 	}
 
 	executer interface {
 		execute()
-		toProto() *common.Task
 	}
 
 	scheduler interface {
-		schedule(prog progress, now time.Time) (nextFire time.Time, executionNumber int, done bool)
-		toProto() *common.Schedule
+		schedule(prog Progress, now time.Time) (nextFire time.Time, executionNumber int, done bool)
 	}
 )
 
 // InfiniteExecutions indicates a timer should fire until cancelled.
 const InfiniteExecutions = 0
 
-// Context manages the goroutines created by work from a group of timers.
+// Canceller is used to cancel a goroutine started by a Run function.
 type (
-	Context interface {
+	Canceller interface {
 		Cancel()
-		done() <-chan struct{}
 	}
 
-	context struct {
-		ch  chan struct{}
-		mux sync.Mutex
+	canceller struct {
+		stopped int32
+		stopCh  chan struct{}
 	}
 )
 
-// NewContext returns an initialized timerContext.
-func NewContext() Context {
-	return &context{ch: make(chan struct{})}
-}
-
-func (w *context) Cancel() {
-	w.mux.Lock()
-	defer w.mux.Unlock()
-
-	select {
-	case <-w.ch:
-	default:
-		close(w.ch)
+func (c *canceller) Cancel() {
+	if atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
+		close(c.stopCh)
 	}
 }
 
-func (w *context) done() <-chan struct{} {
-	return w.ch
-}
+// Run starts the timers execution.
+func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), intialProgress Progress, clock clockwork.Clock) Canceller {
 
-// Run starts the timers execution
-func (t *Timer) Run(ctx Context, consumer chan<- *sarama.ProducerMessage, clock clockwork.Clock) {
+	progress := intialProgress
+	myCanceller := canceller{stopCh: make(chan struct{})}
 
-	pb := t.ToMessageProto()
+	go func() {
+		defer fmt.Println("stopped")
 
-	for {
-		nextFire, executionNumber, done := t.scheduler.schedule(t.progress, clock.Now())
-
-		if done {
-			consumer <- &sarama.ProducerMessage{
-				Topic: "timer",
-				Key:   sarama.ByteEncoder(t.id),
-				Value: nil,
+		for {
+			nextFire, executionNumber, done := t.scheduler.schedule(progress, clock.Now())
+			if done {
+				// Send delete message
+				finishTimer()
+				return
 			}
-			return
+			fmt.Println(executionNumber)
+			progress.LastExecution = executionNumber
+
+			select {
+			case <-clock.After(nextFire.Sub(clock.Now())):
+				t.executer.execute()
+				progress.CompletedExecutions++
+
+				updateProgress(progress)
+
+			case <-myCanceller.stopCh:
+				fmt.Println("stopped by cancelled")
+				return
+			}
 		}
+	}()
 
-		pb.Progress.LastExecution += int32(executionNumber)
-
-		select {
-		case <-clock.After(nextFire.Sub(clock.Now())):
-			t.executer.execute()
-			pb.Progress.CompletedExecutions++
-			pb.Progress.LastExecution++
-
-			val, err := proto.Marshal(pb)
-			if err != nil {
-				panic(fmt.Sprint("timer Run :", err))
-			}
-
-			consumer <- &sarama.ProducerMessage{
-				Topic: "timer",
-				Key:   sarama.ByteEncoder(t.id),
-				Value: sarama.ByteEncoder(val),
-			}
-
-		case <-ctx.done():
-			return
-		}
-	}
+	return &myCanceller
 }
 
-// ToMessageProto creates a messaging.Timer from this Timer.
-func (t *Timer) ToMessageProto() *messaging.Timer {
-	p := messaging.Timer{}
-	p.Meta = &common.Meta{CreateTime: timestamppb.New(t.meta.creationTime)}
-	p.Progress = &common.Progress{
-		CompletedExecutions: int32(t.progress.completedExecutions),
-		LastExecution:       int32(t.progress.lastExecution),
+// FromMessageProto gets a Timer from a messaging.CreateTimer.
+func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
+	if p.Task == nil {
+		return errors.New("(*Timer)FromMessageProto got nil CreateTimer")
 	}
-	p.Task = t.executer.toProto()
-	p.Schedule = t.scheduler.toProto()
-	return &p
-}
 
-// FromMessageProto gets a Timer from a messaging.Timer.
-func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
-	newT := Timer{id: id}
-	newT.meta = meta{creationTime: p.Meta.CreateTime.AsTime()}
-	newT.progress = progress{
-		completedExecutions: int(p.Progress.CompletedExecutions),
-		lastExecution:       int(p.Progress.LastExecution),
-	}
+	var newTimer Timer
+	fmt.Println(p)
 
 	switch task := p.Task.Task.(type) {
 	case *common.Task_HttpConfig:
@@ -150,7 +110,7 @@ func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
 		if err := h.fromProto(task); err != nil {
 			return err
 		}
-		newT.executer = h
+		newTimer.executer = h
 	default:
 		return errors.New("Unknown Task")
 	}
@@ -161,17 +121,17 @@ func (t *Timer) FromMessageProto(p *messaging.Timer, id []byte) error {
 		if err := c.fromProto(sched); err != nil {
 			return err
 		}
-		newT.scheduler = c
+		newTimer.scheduler = c
 	case *common.Schedule_IntervalConfig:
 		var i interval
 		if err := i.fromProto(sched); err != nil {
 			return err
 		}
-		newT.scheduler = i
+		newTimer.scheduler = i
 	default:
 		return errors.New("Unknown Schedule")
 	}
 
-	*t = newT
+	*t = newTimer
 	return nil
 }

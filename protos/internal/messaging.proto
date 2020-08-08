@@ -4,9 +4,8 @@ import "protos/common.proto";
 
 option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging";
 
-message Timer {
+message CreateTimer {
     Task task = 1;
     Schedule schedule = 2;
     Meta meta = 3;
-    Progress progress = 4;
 }
