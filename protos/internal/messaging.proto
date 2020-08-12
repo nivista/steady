@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+import "protos/common.proto";
+
+option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging";
+
+message CreateTimer {
+    Task task = 1;
+    Schedule schedule = 2;
+    Meta meta = 3;
+}
+
+message ExecuteTimer {
+    Progress progress = 1;
+}
