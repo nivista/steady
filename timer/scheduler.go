@@ -21,7 +21,13 @@ func (c cron) schedule(prog Progress, now time.Time) (nextFire time.Time, done b
 		return
 	}
 
-	nextFire = now
+	if prog.LastExecution.IsZero() {
+		// subtract one second so sched.Next will return startTime if it is valid
+		nextFire = c.startTime.Add(-1 * time.Second)
+	} else {
+		nextFire = prog.LastExecution
+	}
+
 	for {
 		nextFire = c.sched.Next(nextFire)
 		if c.stopTime.IsZero() && nextFire.After(c.stopTime) {

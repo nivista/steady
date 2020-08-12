@@ -2,6 +2,7 @@ package timer
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -93,7 +94,7 @@ func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
 	}
 
 	if p.Schedule == nil {
-		return errors.New("9*Timer)FromMessageProto got nil Schedule")
+		return errors.New("(*Timer)FromMessageProto got nil Schedule")
 	}
 
 	var newTimer Timer
@@ -106,13 +107,13 @@ func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
 		}
 		newTimer.executer = h
 	default:
-		return errors.New("Unknown Task")
+		return errors.New("(*Timer)FromMessageProto got unknown Task")
 	}
 
 	var c cron
 	err := c.fromProto(p.Schedule)
 	if err != nil {
-		return err
+		return fmt.Errorf("(*Timer)FromMessageProto: %w", err)
 	}
 
 	newTimer.scheduler = c
