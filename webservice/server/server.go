@@ -26,6 +26,13 @@ func NewServer(db db.Client, queue queue.Client) services.SteadyServer {
 }
 
 func (s *server) CreateTimer(ctx context.Context, req *services.CreateTimerRequest) (*services.CreateTimerResponse, error) {
+	// TODO validate schedule execter, etc.
+
+	// if starttime is unset, starttime = now
+	if req.Schedule.StartTime.AsTime().IsZero() {
+		req.Schedule.StartTime = timestamppb.Now()
+	}
+
 	timerID, err := uuid.NewRandom()
 	if err != nil {
 		return nil, err

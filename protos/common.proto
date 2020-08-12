@@ -8,7 +8,7 @@ message Schedule {
     string cron = 1;
     google.protobuf.Timestamp start_time = 2;
     google.protobuf.Timestamp stop_time = 3;
-    Executions executions = 4;
+    Executions max_executions = 4;
 }
 
 enum Executions {
@@ -40,16 +40,4 @@ message HTTPConfig {
     Method method = 2;
     string body = 3;
     map<string, string> headers = 4;
-}
-
-message IntervalConfig {
-    google.protobuf.Timestamp start_time = 1;
-    int32 interval = 2;
-    Executions executions = 3;
-}
-
-message CronConfig {
-    google.protobuf.Timestamp start_time = 1;
-    string cron = 2;
-    Executions executions = 3;
 }

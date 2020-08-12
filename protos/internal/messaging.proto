@@ -9,3 +9,7 @@ message CreateTimer {
     Schedule schedule = 2;
     Meta meta = 3;
 }
+
+message ExecuteTimer {
+    Progress progress = 1;
+}

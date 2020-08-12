@@ -109,6 +109,14 @@ func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
 		return errors.New("Unknown Task")
 	}
 
+	var c cron
+	err := c.fromProto(p.Schedule)
+	if err != nil {
+		return err
+	}
+
+	newTimer.scheduler = c
+
 	*t = newTimer
 	return nil
 }

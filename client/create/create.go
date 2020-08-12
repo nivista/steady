@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/.gen/protos/services"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func main() {
@@ -33,15 +31,11 @@ func main() {
 			},
 		},
 		Schedule: &common.Schedule{
-			Schedule: &common.Schedule_IntervalConfig{
-				IntervalConfig: &common.IntervalConfig{
-					StartTime:  timestamppb.New(time.Now().UTC()),
-					Interval:   10,
-					Executions: 5,
-				},
-			},
+			Cron:          "@every 5s",
+			MaxExecutions: 5,
 		},
 	}
+
 	res, err := c.CreateTimer(context.Background(), &req)
 	if err != nil {
 		panic(err)
