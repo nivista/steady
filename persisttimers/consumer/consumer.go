@@ -32,7 +32,7 @@ func (c *consumer) Cleanup(session sarama.ConsumerGroupSession) error {
 
 func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key, msg.Partition)
+		var k, err = keys.ParseKey(msg.Key)
 		if err != nil {
 			fmt.Println("handling message error:", err.Error())
 		}

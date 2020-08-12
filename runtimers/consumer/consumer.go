@@ -82,7 +82,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 	man.GenerationID = strconv.Itoa(int(session.GenerationID()))
 
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key, msg.Partition)
+		var k, err = keys.ParseKey(msg.Key)
 		if err != nil {
 			fmt.Println("handling message error:", err.Error())
 			// we didn't mark the message here oops

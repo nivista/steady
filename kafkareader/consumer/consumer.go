@@ -46,7 +46,7 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	fmt.Println(claim.InitialOffset())
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key, msg.Partition)
+		var k, err = keys.ParseKey(msg.Key)
 		if err != nil {
 			fmt.Println("handling message error:", err.Error())
 		}

@@ -34,7 +34,7 @@ const (
 	createTimerLabel  = "create"
 	createTimerFields = 2
 
-	executeTimerLabel  = "prog"
+	executeTimerLabel  = "execute"
 	executeTimerFields = 2
 
 	dummyLabel  = "dummy"
@@ -107,7 +107,7 @@ func (Dummy) Length() int {
 }
 
 // ParseKey parses a timer key.
-func ParseKey(key []byte, partition int32) (Key, error) {
+func ParseKey(key []byte) (Key, error) {
 	var s = string(key)
 	var parts = strings.Split(s, ":")
 
