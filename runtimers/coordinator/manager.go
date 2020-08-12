@@ -55,8 +55,8 @@ func (m *Manager) AddTimer(id uuid.UUID, domain string, t *messaging.CreateTimer
 
 	m.workers[id] = &worker{
 		timer:            &timer,
-		timerKey:         keys.NewTimer(domain, id),
-		timerProgressKey: keys.NewTimerProgress(domain, id),
+		timerKey:         keys.NewCreateTimer(domain, id),
+		timerProgressKey: keys.NewExecuteTimer(domain, id),
 	}
 
 	if m.Active {

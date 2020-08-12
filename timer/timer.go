@@ -36,9 +36,6 @@ type (
 	}
 )
 
-// InfiniteExecutions indicates a timer should fire until cancelled.
-const InfiniteExecutions = 0
-
 func getCanceller() (stopCh chan struct{}, cancelFn func()) {
 	var stopped int32
 

@@ -39,7 +39,7 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 		switch key := k.(type) {
 		// A timer Create or Delete
-		case keys.Timer:
+		case keys.CreateTimer:
 			var (
 				id     = key.TimerUUID()
 				domain = key.Domain()
@@ -64,7 +64,7 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 		// A Progress update or delete
-		case keys.TimerProgress:
+		case keys.ExecuteTimer:
 			var (
 				id     = key.TimerUUID()
 				domain = key.Domain()

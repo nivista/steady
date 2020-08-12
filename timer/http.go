@@ -30,19 +30,6 @@ func (h http) execute() {
 	fmt.Printf("Execute http w/ config: %v\n", h)
 }
 
-func (h http) toProto() *common.Task {
-	return &common.Task{
-		Task: &common.Task_HttpConfig{
-			HttpConfig: &common.HTTPConfig{
-				Url:     h.url,
-				Method:  h.method.toProto(),
-				Body:    h.body,
-				Headers: h.headers,
-			},
-		},
-	}
-}
-
 func (h *http) fromProto(p *common.Task_HttpConfig) error {
 	httpConfig := p.HttpConfig
 	var m method
@@ -57,17 +44,6 @@ func (h *http) fromProto(p *common.Task_HttpConfig) error {
 		headers: httpConfig.Headers,
 	}
 	return nil
-}
-
-func (m method) toProto() common.Method {
-	switch m {
-	case GET:
-		return common.Method_GET
-	case POST:
-		return common.Method_POST
-	default:
-		panic("Unknown method type")
-	}
 }
 
 func (m *method) fromProto(p common.Method) error {

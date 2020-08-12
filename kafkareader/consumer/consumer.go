@@ -61,7 +61,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		fmt.Println("-- KEY:", string(msg.Key))
 		switch k.(type) {
 		// A timer Create or Delete
-		case keys.Timer:
+		case keys.CreateTimer:
 			if msg.Value == nil {
 				fmt.Println("-- VALUE: <nil>")
 				break
@@ -82,7 +82,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			fmt.Println("-- VALUE:", string(json))
 
 		// A Progress update or delete
-		case keys.TimerProgress:
+		case keys.ExecuteTimer:
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
 				fmt.Println("-- VALUE: <nil>")

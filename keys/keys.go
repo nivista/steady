@@ -12,90 +12,83 @@ type (
 	// Key represents a kafka key.
 	Key interface {
 		sarama.Encoder
-
-		// Gets the UUID of the timer this relates to
-		//TimerUUID() uuid.UUID
-
-		// Gets the domain this timer belongs to
-		//Domain() string
 	}
 
-	// Timer is a create timer or delete timer event, value should be a messaging.Timer or nil.
-	Timer struct {
+	// CreateTimer is a create timer or delete timer event, value should be a messaging.CreateTimer or nil.
+	CreateTimer struct {
 		domain    string
 		timerUUID uuid.UUID
 	}
 
-	// TimerProgress is an update progress event, value should be a common.Progress or nil.
-	TimerProgress struct {
+	// ExecuteTimer is an execute timer event, value should be a common.ExecuteTimer or nil.
+	ExecuteTimer struct {
 		domain    string
 		timerUUID uuid.UUID
 	}
 
-	// Dummy is a dummy event so a node knows when its caught up after a repartition.
-	// Value should be nil. Metadata should include NodeID.
+	// Dummy is a dummy event so a node knows when its caught up after a repartition. Value should be nil.
 	Dummy struct{}
 )
 
 const (
-	timerLabel  = "timer"
-	timerFields = 2
+	createTimerLabel  = "create"
+	createTimerFields = 2
 
-	timerProgressLabel  = "prog"
-	timerProgressFields = 2
+	executeTimerLabel  = "prog"
+	executeTimerFields = 2
 
 	dummyLabel  = "dummy"
 	dummyFields = 0
 )
 
-// NewTimer creates a new Timer.
-func NewTimer(domain string, timerUUID uuid.UUID) Key {
-	return Timer{domain: domain, timerUUID: timerUUID}
+// NewCreateTimer creates a new CreateTimer key.
+func NewCreateTimer(domain string, timerUUID uuid.UUID) Key {
+	return CreateTimer{domain: domain, timerUUID: timerUUID}
 }
 
 // Encode returns an encoded timer.
-func (t Timer) Encode() ([]byte, error) {
-	return []byte(fmt.Sprintf("%v:%v:%v", timerLabel, t.domain, t.timerUUID)), nil
+func (c CreateTimer) Encode() ([]byte, error) {
+	return []byte(fmt.Sprintf("%v:%v:%v", createTimerLabel, c.domain, c.timerUUID)), nil
 }
 
 // Length returns the Length of an encoded timer.
-func (t Timer) Length() int {
-	return timerFields + len(timerLabel) + len(t.domain) + len(t.timerUUID.String())
+func (c CreateTimer) Length() int {
+	return createTimerFields + len(createTimerLabel) + len(c.domain) + len(c.timerUUID.String())
 }
 
 // TimerUUID returns the TimerUUID.
-func (t Timer) TimerUUID() uuid.UUID {
-	return t.timerUUID
+func (c CreateTimer) TimerUUID() uuid.UUID {
+	return c.timerUUID
 }
 
 // Domain returns the domain.
-func (t Timer) Domain() string {
-	return t.domain
+func (c CreateTimer) Domain() string {
+	return c.domain
 }
 
-// NewTimerProgress creates a new NewTimerProgress.
-func NewTimerProgress(domain string, timerUUID uuid.UUID) Key {
-	return TimerProgress{domain: domain, timerUUID: timerUUID}
+// NewExecuteTimer creates a new ExecuteTimer key.
+func NewExecuteTimer(domain string, timerUUID uuid.UUID) Key {
+	return ExecuteTimer{domain: domain, timerUUID: timerUUID}
 }
 
 // Encode returns an encoded TimerProgress.
-func (t TimerProgress) Encode() ([]byte, error) {
-	return []byte(fmt.Sprintf("%v:%v:%v", timerProgressLabel, t.domain, t.timerUUID)), nil
+func (e ExecuteTimer) Encode() ([]byte, error) {
+	return []byte(fmt.Sprintf("%v:%v:%v", executeTimerLabel, e.domain, e.timerUUID)), nil
 }
 
 // Length returns the length of an encoded TimerProgress.
-func (t TimerProgress) Length() int {
-	return timerProgressFields + len(timerProgressLabel) + len(t.domain) + len(t.timerUUID.String())
+func (e ExecuteTimer) Length() int {
+	return executeTimerFields + len(executeTimerLabel) + len(e.domain) + len(e.timerUUID.String())
 }
 
 // TimerUUID returns the TimerUUID.
-func (t TimerProgress) TimerUUID() uuid.UUID {
-	return t.timerUUID
+func (e ExecuteTimer) TimerUUID() uuid.UUID {
+	return e.timerUUID
 }
 
 // Domain returns the Domain.
-func (t TimerProgress) Domain() string {
-	return t.domain
+func (e ExecuteTimer) Domain() string {
+	return e.domain
 }
 
 // NewDummy returns a new Dummy.
@@ -119,8 +112,8 @@ func ParseKey(key []byte, partition int32) (Key, error) {
 	var parts = strings.Split(s, ":")
 
 	switch parts[0] {
-	case timerLabel:
-		if len(parts) != timerFields+1 {
+	case createTimerLabel:
+		if len(parts) != createTimerFields+1 {
 			return nil, fmt.Errorf("wrong number of fields for key %v", s)
 		}
 
@@ -130,10 +123,10 @@ func ParseKey(key []byte, partition int32) (Key, error) {
 			return nil, fmt.Errorf("parsing id key %v: %w", s, err)
 		}
 
-		return NewTimer(domain, id), nil
+		return NewCreateTimer(domain, id), nil
 
-	case timerProgressLabel:
-		if len(parts) != timerProgressFields+1 {
+	case executeTimerLabel:
+		if len(parts) != executeTimerFields+1 {
 			return nil, fmt.Errorf("wrong number of fields for key: %v", s)
 		}
 
@@ -143,7 +136,7 @@ func ParseKey(key []byte, partition int32) (Key, error) {
 			return nil, fmt.Errorf("parsing id key %v: %w", s, err)
 		}
 
-		return NewTimerProgress(domain, id), nil
+		return NewExecuteTimer(domain, id), nil
 	case dummyLabel:
 		if len(parts) != dummyFields+1 {
 			return nil, fmt.Errorf("wrong number of fields for key: %v", s)
@@ -153,16 +146,4 @@ func ParseKey(key []byte, partition int32) (Key, error) {
 	}
 
 	return nil, fmt.Errorf("unknown key type")
-}
-
-func idToPartition(id [16]byte, partitions int32) int32 {
-	var partition int32
-
-	for b := range id {
-		partition <<= 8
-		partition += int32(b)
-		partition %= partitions
-	}
-
-	return partition
 }

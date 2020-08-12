@@ -39,7 +39,7 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 
 	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       keys.NewTimer(domain, timerID),
+		Key:       keys.NewCreateTimer(domain, timerID),
 		Value:     sarama.ByteEncoder(bytes),
 		Partition: c.bytesToPartition(timerID),
 	})
@@ -50,7 +50,7 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
 	_, _, err := c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       keys.NewTimer(domain, timerID),
+		Key:       keys.NewCreateTimer(domain, timerID),
 		Value:     nil,
 		Partition: c.bytesToPartition(timerID),
 	})
@@ -61,7 +61,7 @@ func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
 func (c *client) bytesToPartition(id [16]byte) int32 {
 	var partition int32
 
-	for b := range id {
+	for _, b := range id {
 		partition = partition << 8
 		partition += int32(b)
 		partition = partition % c.partitions

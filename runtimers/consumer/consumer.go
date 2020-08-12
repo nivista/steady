@@ -97,7 +97,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 		switch key := k.(type) {
 		// A timer Create or Delete
-		case keys.Timer:
+		case keys.CreateTimer:
 			var (
 				id     = key.TimerUUID()
 				domain = key.Domain()
@@ -122,7 +122,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 		// A Progress update or delete
-		case keys.TimerProgress:
+		case keys.ExecuteTimer:
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
 				delete(staleProgressCandiates, string(msg.Key))

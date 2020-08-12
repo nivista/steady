@@ -15,8 +15,11 @@ type cron struct {
 
 var parser = rcron.NewParser(rcron.Minute | rcron.Hour | rcron.Dom | rcron.Month | rcron.Dow | rcron.SecondOptional | rcron.Descriptor)
 
+// infiniteExecutions indicates a timer should fire until cancelled.
+const infiniteExecutions = 0
+
 func (c cron) schedule(prog Progress, now time.Time) (nextFire time.Time, done bool) {
-	if c.maxExecutions != InfiniteExecutions && prog.CompletedExecutions >= c.maxExecutions {
+	if c.maxExecutions != infiniteExecutions && prog.CompletedExecutions >= c.maxExecutions {
 		done = true
 		return
 	}
