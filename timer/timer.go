@@ -1,10 +1,14 @@
 package timer
 
 import (
+	"errors"
+	"fmt"
 	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/nivista/steady/.gen/protos/common"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 )
 
 type (
@@ -78,4 +82,39 @@ func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialPr
 	}()
 
 	return cancel
+}
+
+// FromMessageProto gets a Timer from a messaging.CreateTimer.
+func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
+	if p.Task == nil {
+		return errors.New("(*Timer)FromMessageProto got nil Task")
+	}
+
+	if p.Schedule == nil {
+		return errors.New("(*Timer)FromMessageProto got nil Schedule")
+	}
+
+	var newTimer Timer
+
+	switch task := p.Task.Task.(type) {
+	case *common.Task_HttpConfig:
+		var h http
+		if err := h.fromProto(task); err != nil {
+			return err
+		}
+		newTimer.executer = h
+	default:
+		return errors.New("(*Timer)FromMessageProto got unknown Task")
+	}
+
+	var c cron
+	err := c.fromProto(p.Schedule)
+	if err != nil {
+		return fmt.Errorf("(*Timer)FromMessageProto: %w", err)
+	}
+
+	newTimer.scheduler = c
+
+	*t = newTimer
+	return nil
 }
