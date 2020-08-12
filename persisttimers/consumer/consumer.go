@@ -37,14 +37,14 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			fmt.Println("handling message error:", err.Error())
 		}
 
-		var (
-			id     = k.TimerUUID()
-			domain = k.Domain()
-		)
-
-		switch k.(type) {
+		switch key := k.(type) {
 		// A timer Create or Delete
 		case keys.Timer:
+			var (
+				id     = key.TimerUUID()
+				domain = key.Domain()
+			)
+
 			// is delete message
 			if msg.Value == nil {
 				c.db.FinishTimer(session.Context(), domain, id)
@@ -65,6 +65,11 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 		// A Progress update or delete
 		case keys.TimerProgress:
+			var (
+				id     = key.TimerUUID()
+				domain = key.Domain()
+			)
+
 			var progress common.Progress
 			err := proto.Unmarshal(msg.Value, &progress)
 			if err != nil {

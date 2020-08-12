@@ -1,5 +1,6 @@
 package timer
 
+/*
 import (
 	"errors"
 	"fmt"
@@ -186,3 +187,4 @@ func (c *cron) fromProto(p *common.Schedule_CronConfig) error {
 	*c = myCron
 	return nil
 }
+*/

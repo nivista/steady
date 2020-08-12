@@ -32,7 +32,7 @@ const (
 
 func main() {
 	viper.SetDefault(kafkaTopic, "timers")
-	viper.SetDefault(partitions, 3)
+	viper.SetDefault(partitions, 1)
 	viper.SetDefault(nodeID, "")
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
 	viper.SetDefault(kafkaVersion, "2.2.1")
@@ -59,7 +59,6 @@ func main() {
 	config.Version = version
 	config.Producer.RequiredAcks = sarama.NoResponse
 	config.Producer.Retry.Max = 10
-	config.Producer.Return.Successes = true
 	config.Consumer.Group.Rebalance.Strategy = consumer.ConsistentHash(0)
 	config.Consumer.Offsets.Initial = sarama.OffsetOldest
 

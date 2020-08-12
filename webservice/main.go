@@ -36,7 +36,7 @@ const (
 func main() {
 	viper.SetDefault(postgresURL, "postgresql://")
 	viper.SetDefault(kafkaTopic, "timers")
-	viper.SetDefault(partitions, 3)
+	viper.SetDefault(partitions, 1)
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
 	viper.SetDefault(kafkaVersion, "2.2.1")
 	viper.SetDefault(addr, "localhost:8080")

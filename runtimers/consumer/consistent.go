@@ -40,11 +40,12 @@ func (l hashring) Swap(i, j int) {
 	l[i], l[j] = l[j], l[i]
 }
 
+// Name returns name of balancing strategy.
 func (c ConsistentHash) Name() string {
 	return "ConsistentHash"
 }
 
-// Plan to consistently hash partitions.
+// Plan assigns partitions to members based on consistent hashing.
 func (c ConsistentHash) Plan(members map[string]sarama.ConsumerGroupMemberMetadata, topics map[string][]int32) (sarama.BalanceStrategyPlan, error) {
 	plan := make(sarama.BalanceStrategyPlan)
 	membersList := make([]string, len(members))
@@ -101,6 +102,8 @@ func consistentHashTopic(members []string, partitions []int32) map[string][]int3
 	return plan
 }
 
+// AssignmentData returns the serialized assignment data for the specified
+// memberID
 func (ConsistentHash) AssignmentData(memberID string, topics map[string][]int32, generationID int32) ([]byte, error) {
 	return []byte{}, nil
 }

@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Consumer consumes from the database and runs its partition of timers.
+// Consumer consumes from Kafka and logs the contents.
 type Consumer struct {
 	nodeID string
 	topic  string
@@ -27,9 +27,6 @@ func NewConsumer(nodeID, topic string) sarama.ConsumerGroupHandler {
 
 // Setup is run at the beginning of a new session, before ConsumeClaim
 func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
-	fmt.Println(session.Claims()[c.topic])
-
-	session.GenerationID()
 	partitions := session.Claims()[c.topic]
 
 	for _, partition := range partitions {
@@ -47,25 +44,14 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-
-	var (
-		initialLatestReplicatedMessageOffset = claim.HighWaterMarkOffset() - 1
-	)
-
-	fmt.Println("INITIAL_LATEST_REPLICATED_MESSAGE_OFFSET", initialLatestReplicatedMessageOffset)
+	fmt.Println(claim.InitialOffset())
 	for msg := range claim.Messages() {
 		var k, err = keys.ParseKey(msg.Key, msg.Partition)
 		if err != nil {
 			fmt.Println("handling message error:", err.Error())
 		}
 
-		var (
-			id     = k.TimerUUID()
-			domain = k.Domain()
-		)
-		fmt.Println("KAFKA ENTRY OFFSET ", msg.Offset)
-		fmt.Println("-- DOMAIN:", domain)
-		fmt.Println("-- ID:", id)
+		fmt.Printf("TOPIC %v, PARTITION %v, OFFSET %v\n", claim.Topic(), claim.Partition(), msg.Offset)
 
 		headers := map[string]string{}
 		for _, h := range msg.Headers {
@@ -76,7 +62,6 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		switch k.(type) {
 		// A timer Create or Delete
 		case keys.Timer:
-			fmt.Println("-- KEY TYPE: create or delete")
 			if msg.Value == nil {
 				fmt.Println("-- VALUE: <nil>")
 				break
@@ -98,7 +83,6 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 		// A Progress update or delete
 		case keys.TimerProgress:
-			fmt.Println("-- KEY TYPE: update or delete progress")
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
 				fmt.Println("-- VALUE: <nil>")
@@ -118,6 +102,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 			fmt.Println("-- VALUE:", string(json))
+		case keys.Dummy:
 		default:
 			panic("unknown key type")
 		}

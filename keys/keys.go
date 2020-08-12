@@ -14,10 +14,10 @@ type (
 		sarama.Encoder
 
 		// Gets the UUID of the timer this relates to
-		TimerUUID() uuid.UUID
+		//TimerUUID() uuid.UUID
 
 		// Gets the domain this timer belongs to
-		Domain() string
+		//Domain() string
 	}
 
 	// Timer is a create timer or delete timer event, value should be a messaging.Timer or nil.
@@ -32,11 +32,9 @@ type (
 		timerUUID uuid.UUID
 	}
 
-	// NodeStart is a dummy event so a node knows when its caught up after a repartition. Value should be nil.
-	//NodeStart struct {
-	//	NodeID    string
-	//	partition int32
-	//}
+	// Dummy is a dummy event so a node knows when its caught up after a repartition.
+	// Value should be nil. Metadata should include NodeID.
+	Dummy struct{}
 )
 
 const (
@@ -45,6 +43,9 @@ const (
 
 	timerProgressLabel  = "prog"
 	timerProgressFields = 2
+
+	dummyLabel  = "dummy"
+	dummyFields = 0
 )
 
 // NewTimer creates a new Timer.
@@ -97,6 +98,21 @@ func (t TimerProgress) Domain() string {
 	return t.domain
 }
 
+// NewDummy returns a new Dummy.
+func NewDummy() Dummy {
+	return Dummy{}
+}
+
+// Encode returns an encoded Dummy.
+func (Dummy) Encode() ([]byte, error) {
+	return []byte(dummyLabel), nil
+}
+
+// Length returns the length of an encoded Dummy.
+func (Dummy) Length() int {
+	return len(dummyLabel)
+}
+
 // ParseKey parses a timer key.
 func ParseKey(key []byte, partition int32) (Key, error) {
 	var s = string(key)
@@ -128,6 +144,12 @@ func ParseKey(key []byte, partition int32) (Key, error) {
 		}
 
 		return NewTimerProgress(domain, id), nil
+	case dummyLabel:
+		if len(parts) != dummyFields+1 {
+			return nil, fmt.Errorf("wrong number of fields for key: %v", s)
+		}
+
+		return NewDummy(), nil
 	}
 
 	return nil, fmt.Errorf("unknown key type")

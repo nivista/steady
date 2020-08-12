@@ -5,10 +5,14 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/nivista/steady/.gen/protos/common";
 
 message Schedule {
-    oneof schedule {
-        CronConfig cron_config = 1;
-        IntervalConfig interval_config = 2;
-    }
+    string cron = 1;
+    google.protobuf.Timestamp start_time = 2;
+    google.protobuf.Timestamp stop_time = 3;
+    Executions executions = 4;
+}
+
+enum Executions {
+    INFINITE = 0;
 }
 
 message Task {
@@ -23,16 +27,12 @@ message Meta {
 
 message Progress {
     int32 completedExecutions = 1;
-    int32 lastExecution = 2;
+    google.protobuf.Timestamp lastExecution = 2;
 }
 
 enum Method {
     GET = 0;
     POST = 1;
-}
-
-enum Executions {
-    INFINITE = 0;
 }
 
 message HTTPConfig {

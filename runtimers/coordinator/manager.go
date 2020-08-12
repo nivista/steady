@@ -11,16 +11,18 @@ import (
 	"github.com/nivista/steady/keys"
 	"github.com/nivista/steady/timer"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// manager manages a partition of timers. It is not concurrency safe.
+// Manager manages a partition of timers. It is not concurrency safe.
 type Manager struct {
-	active    bool
-	workers   map[uuid.UUID]*worker
-	producer  chan<- *sarama.ProducerMessage
-	clock     clockwork.Clock
-	partition int32
-	topic     string
+	Active       bool
+	GenerationID string
+	workers      map[uuid.UUID]*worker
+	producer     chan<- *sarama.ProducerMessage
+	clock        clockwork.Clock
+	partition    int32
+	topic        string
 }
 
 // worker manages a single timer.
@@ -30,7 +32,7 @@ type worker struct {
 
 	timerKey, timerProgressKey sarama.Encoder
 
-	timer.Canceller
+	cancelFn func()
 }
 
 func newManager(producer chan<- *sarama.ProducerMessage, topic string, partition int32, clock clockwork.Clock) *Manager {
@@ -57,7 +59,7 @@ func (m *Manager) AddTimer(id uuid.UUID, domain string, t *messaging.CreateTimer
 		timerProgressKey: keys.NewTimerProgress(domain, id),
 	}
 
-	if m.active {
+	if m.Active {
 		m.startWorker(id)
 	}
 
@@ -67,7 +69,7 @@ func (m *Manager) AddTimer(id uuid.UUID, domain string, t *messaging.CreateTimer
 func (m *Manager) UpdateTimerProgress(id uuid.UUID, prog *common.Progress) {
 	m.workers[id].initialProgress = timer.Progress{
 		CompletedExecutions: int(prog.CompletedExecutions),
-		LastExecution:       int(prog.LastExecution),
+		LastExecution:       prog.LastExecution.AsTime(),
 	}
 }
 
@@ -81,45 +83,42 @@ func (m *Manager) RemoveTimer(id uuid.UUID) {
 		return
 	}
 
-	worker.Cancel()
+	if m.Active {
+		worker.cancelFn()
+	}
 
 	delete(m.workers, id)
 }
 
 func (m *Manager) Start() {
-	if m.active == true {
+	if m.Active == true {
 		return
 	}
-	m.active = true
+	m.Active = true
 
 	for id := range m.workers {
 		m.startWorker(id)
 	}
 }
 
-func (m *Manager) IsActive() bool {
-	return m.active
-}
-
 func (m *Manager) stop() {
-	if m.active == false {
+	if m.Active == false {
 		return
 	}
-	m.active = false
+	m.Active = false
 
 	for _, worker := range m.workers {
-		worker.Cancel()
+		worker.cancelFn()
 	}
-	m.workers = nil
+	m.workers = make(map[uuid.UUID]*worker)
 }
 
 func (m *Manager) startWorker(id uuid.UUID) {
 	var w = m.workers[id]
 
 	var progressUpdateFunc = func(prog timer.Progress) {
-		fmt.Println("progressupdatefunc: ", prog)
 		var progPB = common.Progress{
-			LastExecution:       int32(prog.LastExecution),
+			LastExecution:       timestamppb.New(prog.LastExecution),
 			CompletedExecutions: int32(prog.CompletedExecutions),
 		}
 
@@ -134,19 +133,23 @@ func (m *Manager) startWorker(id uuid.UUID) {
 			Key:       w.timerProgressKey,
 			Value:     sarama.ByteEncoder(bytes),
 			Partition: m.partition,
-			Headers:   []sarama.RecordHeader{{[]byte("sender"), []byte("runtimers prog update")}},
+			Headers: []sarama.RecordHeader{{
+				Key:   []byte("generationID"),
+				Value: []byte(m.GenerationID),
+			}},
 		}
-		fmt.Println("progressupdatefunc sent")
 	}
 
 	var finishTimerFunc = func() {
-		fmt.Println("finish timer func")
 		m.producer <- &sarama.ProducerMessage{
 			Topic:     m.topic,
 			Key:       w.timerKey,
 			Value:     nil,
 			Partition: m.partition,
-			Headers:   []sarama.RecordHeader{{[]byte("sender"), []byte("runtimers timer delete")}},
+			Headers: []sarama.RecordHeader{{
+				Key:   []byte("generationID"),
+				Value: []byte(m.GenerationID),
+			}},
 		}
 
 		m.producer <- &sarama.ProducerMessage{
@@ -154,9 +157,9 @@ func (m *Manager) startWorker(id uuid.UUID) {
 			Key:       w.timerProgressKey,
 			Value:     nil,
 			Partition: m.partition,
-			Headers:   []sarama.RecordHeader{{[]byte("sender"), []byte("runtimers prog delete")}},
 		}
+		// TODO remove timer from manager?? or wait until we get Kafka message?
 	}
 
-	w.Canceller = w.timer.Run(progressUpdateFunc, finishTimerFunc, w.initialProgress, m.clock)
+	w.cancelFn = w.timer.Run(progressUpdateFunc, finishTimerFunc, w.initialProgress, m.clock)
 }

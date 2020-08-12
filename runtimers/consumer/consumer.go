@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/.gen/protos/common"
@@ -36,13 +37,28 @@ func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 	partitions := session.Claims()[c.topic]
 
 	for _, partition := range partitions {
-		if !c.coord.HasPartition(partition) {
-			session.ResetOffset(c.topic, partition, -1, "")
+		// if we already have this partition, do nothing
+		if c.coord.HasPartition(partition) {
+			continue
+		}
+
+		// read from beggining
+		session.ResetOffset(c.topic, partition, -1, "")
+
+		// send dummy message to know when "present" is
+		c.producer.Input() <- &sarama.ProducerMessage{
+			Topic: c.topic,
+			Key:   keys.NewDummy(),
+			Value: nil,
+			Headers: []sarama.RecordHeader{{
+				Key:   []byte("generationID"),
+				Value: []byte(strconv.Itoa(int(session.GenerationID()))),
+			}},
+			Partition: partition,
 		}
 	}
-	// this is where i halt production.
-	// i will stop sending messages, and then i will consume, but others might still be sending messages.
-	// if this happens
+
+	// drop and stop whatever partitions you need to.
 	c.coord.HandleRepartition(partitions)
 
 	return nil
@@ -57,29 +73,36 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 
 	var (
-		initialLatestReplicatedMessageOffset = claim.HighWaterMarkOffset() - 1
-		man                                  = c.coord.GetManager(claim.Partition())
+		man = c.coord.GetManager(claim.Partition())
 
-		// encounteredProgressDelete tracks whether a delete message (nil) for a progress with a given id has been found
-		// it allows us to clear out stale progresses in Kafka that ended up in front of their original delete messages
-		encounteredProgressDelete = map[string]bool{}
+		// set of the keys of all the potentially stale progresses
+		staleProgressCandiates = map[string]struct{}{}
 	)
+
+	man.GenerationID = strconv.Itoa(int(session.GenerationID()))
 
 	for msg := range claim.Messages() {
 		var k, err = keys.ParseKey(msg.Key, msg.Partition)
 		if err != nil {
 			fmt.Println("handling message error:", err.Error())
+			// we didn't mark the message here oops
+			continue
 		}
 
-		var (
-			keyStr = string(msg.Key)
-			id     = k.TimerUUID()
-			domain = k.Domain()
-		)
-		switch k.(type) {
+		var headers = map[string]string{}
+
+		for _, header := range msg.Headers {
+			headers[string(header.Key)] = string(header.Value)
+		}
+
+		switch key := k.(type) {
 		// A timer Create or Delete
 		case keys.Timer:
-			fmt.Println(msg.Value)
+			var (
+				id     = key.TimerUUID()
+				domain = key.Domain()
+			)
+
 			if msg.Value == nil {
 				man.RemoveTimer(id)
 				break
@@ -102,7 +125,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		case keys.TimerProgress:
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
-				encounteredProgressDelete[keyStr] = true
+				delete(staleProgressCandiates, string(msg.Key))
 				break
 			}
 
@@ -113,34 +136,69 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 				break
 			}
 
-			if man.HasTimer(id) {
-				if !man.IsActive() {
-					man.UpdateTimerProgress(id, &prog)
-				}
-			} else {
-				// if man doesn't know about this timer, it means the timer was created and then later deleted.
-				// track all progresses in Kafka that haven't been deleted even though their timers have been.
-				encounteredProgressDelete[keyStr] = false
+			var id = key.TimerUUID()
+
+			// we're reading historical progress updates to get to the current state
+			if man.HasTimer(id) && !man.Active {
+				man.UpdateTimerProgress(id, &prog)
+				break
 			}
 
-		default:
-			panic("unknown key type")
-		}
+			// this progress update is from a timer we already have running
+			if man.HasTimer(id) {
+				break
+			}
 
-		if !man.IsActive() && msg.Offset >= initialLatestReplicatedMessageOffset {
+			// in this case we definitley already sent a progress delete
+			if man.GenerationID == headers["generationID"] {
+				break
+			}
+
+			// in this case this progress update probably doesn't have a delete coming yet.
+			if man.Active {
+				c.producer.Input() <- &sarama.ProducerMessage{
+					Topic: c.topic,
+					Key:   sarama.ByteEncoder(msg.Key),
+					Value: nil,
+					Headers: []sarama.RecordHeader{{
+						Key:   []byte("generationID"),
+						Value: []byte(man.GenerationID),
+					}},
+					Partition: msg.Partition,
+				}
+				break
+			}
+
+			// there might be a delete just later in the queue
+			staleProgressCandiates[string(msg.Key)] = struct{}{}
+
+		case keys.Dummy:
+			// is this me
+			if headers["generationID"] != man.GenerationID {
+				break
+			}
+
+			// if so start the manager
 			man.Start()
 
 			// delete stale progress updates
-			for key, encountered := range encounteredProgressDelete {
-				if !encountered {
-					c.producer.Input() <- &sarama.ProducerMessage{
-						Topic:     c.topic,
-						Partition: msg.Partition,
-						Key:       sarama.ByteEncoder(key),
-						Value:     nil,
-					}
+			for key := range staleProgressCandiates {
+
+				c.producer.Input() <- &sarama.ProducerMessage{
+					Topic: c.topic,
+					Key:   sarama.ByteEncoder(key),
+					Value: nil,
+					Headers: []sarama.RecordHeader{{
+						Key:   []byte("generationID"),
+						Value: []byte(man.GenerationID),
+					}},
+					Partition: msg.Partition,
 				}
+
 			}
+
+		default:
+			fmt.Println("Unknown key type:", string(msg.Key))
 		}
 
 		session.MarkMessage(msg, "")

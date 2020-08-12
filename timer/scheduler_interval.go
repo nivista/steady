@@ -1,5 +1,6 @@
 package timer
 
+/*
 import (
 	"time"
 
@@ -46,3 +47,4 @@ func (i *interval) fromProto(p *common.Schedule_IntervalConfig) error {
 
 	return nil
 }
+*/

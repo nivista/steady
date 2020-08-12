@@ -2,7 +2,6 @@ package timer
 
 import (
 	"errors"
-	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -23,10 +22,8 @@ type (
 		// CompletedExecutions indicated the number of successfully completed executions.
 		CompletedExecutions int
 
-		// LastExecution indicates which execution was recorded last. It may be greater than CompletedExecutions if a fire
-		// was missed after a long outage. For example there have been 4 successfully completed executions but the last
-		// execution was 5th of the scheduled executions.
-		LastExecution int
+		// LastExecution indicates which execution was recorded last.
+		LastExecution time.Time
 	}
 
 	executer interface {
@@ -34,75 +31,72 @@ type (
 	}
 
 	scheduler interface {
-		schedule(prog Progress, now time.Time) (nextFire time.Time, executionNumber int, done bool)
+		schedule(prog Progress, now time.Time) (nextFire time.Time, done bool)
 	}
 )
 
 // InfiniteExecutions indicates a timer should fire until cancelled.
 const InfiniteExecutions = 0
 
-// Canceller is used to cancel a goroutine started by a Run function.
-type (
-	Canceller interface {
-		Cancel()
+func getCanceller() (stopCh chan struct{}, cancelFn func()) {
+	var stopped int32
+
+	stopCh = make(chan struct{})
+
+	cancelFn = func() {
+		if atomic.CompareAndSwapInt32(&stopped, 0, 1) {
+			close(stopCh)
+		}
 	}
 
-	canceller struct {
-		stopped int32
-		stopCh  chan struct{}
-	}
-)
-
-func (c *canceller) Cancel() {
-	if atomic.CompareAndSwapInt32(&c.stopped, 0, 1) {
-		close(c.stopCh)
-	}
+	return
 }
 
 // Run starts the timers execution.
-func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), intialProgress Progress, clock clockwork.Clock) Canceller {
+func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialProgress Progress, clock clockwork.Clock) (cancel func()) {
 
-	progress := intialProgress
-	myCanceller := canceller{stopCh: make(chan struct{})}
+	var progress = initialProgress
+
+	stopCh, cancel := getCanceller()
 
 	go func() {
-		defer fmt.Println("stopped")
-
 		for {
-			nextFire, executionNumber, done := t.scheduler.schedule(progress, clock.Now())
+			nextFire, done := t.scheduler.schedule(progress, clock.Now())
+
 			if done {
-				// Send delete message
 				finishTimer()
+				cancel()
 				return
 			}
-			fmt.Println(executionNumber)
-			progress.LastExecution = executionNumber
 
 			select {
 			case <-clock.After(nextFire.Sub(clock.Now())):
 				t.executer.execute()
 				progress.CompletedExecutions++
-
+				progress.LastExecution = nextFire
 				updateProgress(progress)
 
-			case <-myCanceller.stopCh:
-				fmt.Println("stopped by cancelled")
+			case <-stopCh:
 				return
 			}
 		}
+
 	}()
 
-	return &myCanceller
+	return cancel
 }
 
 // FromMessageProto gets a Timer from a messaging.CreateTimer.
 func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
 	if p.Task == nil {
-		return errors.New("(*Timer)FromMessageProto got nil CreateTimer")
+		return errors.New("(*Timer)FromMessageProto got nil Task")
+	}
+
+	if p.Schedule == nil {
+		return errors.New("9*Timer)FromMessageProto got nil Schedule")
 	}
 
 	var newTimer Timer
-	fmt.Println(p)
 
 	switch task := p.Task.Task.(type) {
 	case *common.Task_HttpConfig:
@@ -113,23 +107,6 @@ func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
 		newTimer.executer = h
 	default:
 		return errors.New("Unknown Task")
-	}
-
-	switch sched := p.Schedule.Schedule.(type) {
-	case *common.Schedule_CronConfig:
-		var c cron
-		if err := c.fromProto(sched); err != nil {
-			return err
-		}
-		newTimer.scheduler = c
-	case *common.Schedule_IntervalConfig:
-		var i interval
-		if err := i.fromProto(sched); err != nil {
-			return err
-		}
-		newTimer.scheduler = i
-	default:
-		return errors.New("Unknown Schedule")
 	}
 
 	*t = newTimer

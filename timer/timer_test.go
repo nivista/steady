@@ -78,14 +78,15 @@ func (m *mockExecuter) toProto() *common.Task {
 }
 
 type mockScheduler struct {
-	nextFires []time.Time
-	dones     []bool
-	nextIdx   int
+	nextFires        []time.Time
+	executionNumbers []int
+	dones            []bool
+	nextIdx          int
 }
 
 func (m *mockScheduler) schedule(Progress, time.Time) (nextFire time.Time, executionNumber int, done bool) {
 	i := m.nextIdx
-	nextFire, executionNumber, done = m.nextFires[i], 0, m.dones[i]
+	nextFire, executionNumber, done = m.nextFires[i], m.executionNumbers[i], m.dones[i]
 	m.nextIdx++
 	return
 }
@@ -177,3 +178,67 @@ func (m *mockScheduler) toProto() *common.Schedule {
 	}
 
 } */
+
+/* func TestRun(t *testing.T) {
+	var timer Timer = Timer{
+		executer: &mockExecuter{},
+		scheduler: &mockScheduler{
+			nextFires: []time.Time{
+				time.Date(2000, time.January, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2000, time.January, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2000, time.January, 3, 0, 0, 0, 0, time.UTC),
+				{},
+			},
+			dones:            []bool{false, false, false, false},
+			executionNumbers: []int{1, 2, 3, 0},
+		},
+	}
+
+	var prog Progress
+
+	var clock = clockwork.NewFakeClockAt(time.Date(2000, time.January, 0, 0, 0, 0, 0, time.UTC))
+
+	var expectedProgressUpdates = []Progress{
+		{CompletedExecutions: 1, LastExecution: 1},
+		{CompletedExecutions: 2, LastExecution: 2},
+		{CompletedExecutions: 3, LastExecution: 3},
+	}
+	var idx = 0
+	var err string
+	var handleProgressUpdate = func(p Progress) {
+		if err == "" && idx > len(expectedProgressUpdates) {
+			err = "Too many calls to handleProgressUpdate"
+		}
+		if err == "" && expectedProgressUpdates[idx] != p {
+			err = fmt.Sprintf("For progress at idx %v, expected %v, got %v", idx, expectedProgressUpdates[idx], p)
+		}
+
+		idx++
+	}
+
+	var finishes int
+	var handleFinish = func() {
+		finishes++
+	}
+
+	var cancel = timer.Run(handleProgressUpdate, handleFinish, prog, clock)
+
+	var checkErr = func() {
+		if err != "" {
+			t.Fatal(err)
+		}
+	}
+	for i := 0; i < len(expectedProgressUpdates); i++ {
+		checkErr()
+		clock.BlockUntil(1)
+		checkErr()
+		clock.Advance(24 * time.Hour)
+		checkErr()
+		clock.BlockUntil(0)
+	}
+	checkErr()
+	cancel.Cancel()
+	clock.BlockUntil(1)
+	clock.BlockUntil(0)
+}
+*/
