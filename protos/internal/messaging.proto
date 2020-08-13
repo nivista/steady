@@ -13,3 +13,23 @@ message CreateTimer {
 message ExecuteTimer {
     Progress progress = 1;
 }
+
+message Key {
+    message CreateTimer {
+        string domain = 1;
+        string timer_uuid = 2;
+    }
+
+    message ExecuteTimer {
+        string domain = 1;
+        string timer_uuid = 2;
+    }
+
+    message Dummy{}
+
+    oneof key {
+        CreateTimer createTimer = 1;
+        ExecuteTimer executeTimer = 2;
+        Dummy dummy = 3;
+    }
+}
