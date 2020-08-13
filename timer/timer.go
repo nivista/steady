@@ -36,18 +36,18 @@ type (
 	}
 )
 
-func getCanceller() (stopCh chan struct{}, cancelFn func()) {
+func getCanceller() (cancelled <-chan struct{}, cancel func()) {
 	var stopped int32
 
-	stopCh = make(chan struct{})
+	ch := make(chan struct{})
 
-	cancelFn = func() {
+	cancel = func() {
 		if atomic.CompareAndSwapInt32(&stopped, 0, 1) {
-			close(stopCh)
+			close(ch)
 		}
 	}
 
-	return
+	return ch, cancel
 }
 
 // Run starts the timers execution.
@@ -55,7 +55,7 @@ func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialPr
 
 	var progress = initialProgress
 
-	stopCh, cancel := getCanceller()
+	cancelled, cancel := getCanceller()
 
 	go func() {
 		for {
@@ -74,7 +74,7 @@ func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialPr
 				progress.LastExecution = nextFire
 				updateProgress(progress)
 
-			case <-stopCh:
+			case <-cancelled:
 				return
 			}
 		}

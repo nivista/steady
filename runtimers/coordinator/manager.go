@@ -15,13 +15,15 @@ import (
 
 // Manager manages a partition of timers. It is not concurrency safe.
 type Manager struct {
-	Active       bool
+	topic     string
+	partition int32
+
 	GenerationID string
-	workers      map[uuid.UUID]*worker
-	producer     chan<- *sarama.ProducerMessage
-	clock        clockwork.Clock
-	partition    int32
-	topic        string
+	Active       bool
+
+	workers  map[uuid.UUID]*worker
+	producer chan<- *sarama.ProducerMessage
+	clock    clockwork.Clock
 }
 
 // worker manages a single timer.

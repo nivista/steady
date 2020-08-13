@@ -5,6 +5,8 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+// Coordinator hands out managers and stops them for repartitions.
+// Maybe the coordinator should just hand out managers and we deal w/ repartitions in the consumer.
 type Coordinator struct {
 	producer sarama.AsyncProducer
 	managers map[int32]*Manager
