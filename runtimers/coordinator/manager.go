@@ -145,12 +145,14 @@ func (m *Manager) startWorker(id uuid.UUID) {
 	var w = m.workers[id]
 
 	var progressUpdateFunc = func(prog timer.Progress) {
-		var progPB = common.Progress{
-			LastExecution:       timestamppb.New(prog.LastExecution),
-			CompletedExecutions: int32(prog.CompletedExecutions),
+		var pb = messaging.ExecuteTimer{
+			Progress: &common.Progress{
+				LastExecution:       timestamppb.New(prog.LastExecution),
+				CompletedExecutions: int32(prog.CompletedExecutions),
+			},
 		}
 
-		bytes, err := proto.Marshal(&progPB)
+		bytes, err := proto.Marshal(&pb)
 		if err != nil {
 			fmt.Printf("progress update fn worker w/ id %v, err proto.Marshal: %v\n", id, err.Error())
 			return

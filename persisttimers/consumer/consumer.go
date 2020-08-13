@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	"github.com/nivista/steady/keys"
 	"github.com/nivista/steady/persisttimers/db"
@@ -70,13 +69,13 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 				domain = key.Domain()
 			)
 
-			var progress common.Progress
-			err := proto.Unmarshal(msg.Value, &progress)
+			var exec messaging.ExecuteTimer
+			err := proto.Unmarshal(msg.Value, &exec)
 			if err != nil {
-				fmt.Println("store consumer unmarshal progress err:", err.Error())
+				fmt.Println("store consumer unmarshal exec err:", err.Error())
 			}
 
-			err = c.db.UpdateTimerProgress(session.Context(), domain, id, &progress)
+			err = c.db.UpdateTimerProgress(session.Context(), domain, id, exec.Progress)
 			if err != nil {
 				fmt.Println("store consumer UpdateProgress err:", err.Error())
 			}

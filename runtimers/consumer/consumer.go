@@ -85,6 +85,10 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		staleProgressCandiates = map[string]struct{}{}
 	)
 
+	// this happens concurrently with the firing of timers and affects messages produced.
+	// we want the gaurantee that we will send producer messages w/ monotonically increasing generationIDs.
+	// anyways this is bad because it's undefined behavior
+	// instead we can use a RWLock() for updating generation ID
 	man.GenerationID = strconv.Itoa(int(session.GenerationID()))
 
 	for msg := range claim.Messages() {
