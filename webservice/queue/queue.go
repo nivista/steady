@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"fmt"
+
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
@@ -50,12 +52,14 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 		return err
 	}
 
-	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
+	p, o, err := c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
 		Key:       sarama.ByteEncoder(keyBytes),
 		Value:     sarama.ByteEncoder(bytes),
 		Partition: c.bytesToPartition(timerID),
 	})
+
+	fmt.Println(p, o, err)
 
 	return err
 }

@@ -114,7 +114,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			)
 
 			if err != nil {
-				fmt.Println("unmarshal id err", err)
+				fmt.Println("unmarshal id err:", err)
 			}
 
 			if msg.Value == nil {

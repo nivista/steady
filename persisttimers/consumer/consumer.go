@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
+	"github.com/google/uuid"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/keys"
 	"github.com/nivista/steady/persisttimers/db"
 	"google.golang.org/protobuf/proto"
 )
@@ -31,18 +31,23 @@ func (c *consumer) Cleanup(session sarama.ConsumerGroupSession) error {
 
 func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key)
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
 		if err != nil {
-			fmt.Println("handling message error:", err.Error())
+			fmt.Println("consumer claim unmarshal key:", err.Error())
 		}
 
-		switch key := k.(type) {
+		switch k := key.Key.(type) {
 		// A timer Create or Delete
-		case keys.CreateTimer:
+		case *messaging.Key_CreateTimer_:
 			var (
-				id     = key.TimerUUID()
-				domain = key.Domain()
+				id, err = uuid.Parse(k.CreateTimer.TimerUuid)
+				domain  = k.CreateTimer.Domain
 			)
+
+			if err != nil {
+				fmt.Println("unmarshal id err:", err)
+			}
 
 			// is delete message
 			if msg.Value == nil {
@@ -52,7 +57,7 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 			//is create message
 			var createTimer messaging.CreateTimer
-			err := proto.Unmarshal(msg.Value, &createTimer)
+			err = proto.Unmarshal(msg.Value, &createTimer)
 			if err != nil {
 				fmt.Println("store consumer unmarshal timer err:", err.Error())
 			}
@@ -63,14 +68,17 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 		// A Progress update or delete
-		case keys.ExecuteTimer:
+		case *messaging.Key_ExecuteTimer_:
 			var (
-				id     = key.TimerUUID()
-				domain = key.Domain()
+				id, err = uuid.Parse(k.ExecuteTimer.TimerUuid)
+				domain  = k.ExecuteTimer.Domain
 			)
 
+			if err != nil {
+				fmt.Println("unmarshal id err:", err)
+			}
 			var exec messaging.ExecuteTimer
-			err := proto.Unmarshal(msg.Value, &exec)
+			err = proto.Unmarshal(msg.Value, &exec)
 			if err != nil {
 				fmt.Println("store consumer unmarshal exec err:", err.Error())
 			}

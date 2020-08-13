@@ -21,13 +21,13 @@ type Manager struct {
 	GenerationID string
 	Active       bool
 
-	workers  map[uuid.UUID]*worker
-	producer chan<- *sarama.ProducerMessage
-	clock    clockwork.Clock
+	timerDatas map[uuid.UUID]*timerData
+	producer   chan<- *sarama.ProducerMessage
+	clock      clockwork.Clock
 }
 
-// worker manages a single timer.
-type worker struct {
+// timerData is a wrapper around timer that holds the state of progress, the cancelFn, and the timers identifiers.
+type timerData struct {
 	timer           *timer.Timer
 	initialProgress timer.Progress
 
@@ -38,11 +38,11 @@ type worker struct {
 
 func newManager(producer chan<- *sarama.ProducerMessage, topic string, partition int32, clock clockwork.Clock) *Manager {
 	return &Manager{
-		workers:   make(map[uuid.UUID]*worker),
-		producer:  producer,
-		clock:     clock,
-		partition: partition,
-		topic:     topic,
+		timerDatas: make(map[uuid.UUID]*timerData),
+		producer:   producer,
+		clock:      clock,
+		partition:  partition,
+		topic:      topic,
 	}
 }
 
@@ -81,41 +81,41 @@ func (m *Manager) AddTimer(id uuid.UUID, domain string, t *messaging.CreateTimer
 	if err != nil {
 		return nil
 	}
-	m.workers[id] = &worker{
+	m.timerDatas[id] = &timerData{
 		timer:            &timer,
 		timerKey:         sarama.ByteEncoder(createKeyBytes),
 		timerProgressKey: sarama.ByteEncoder(executeKeyBytes),
 	}
 
 	if m.Active {
-		m.startWorker(id)
+		m.startTimerData(id)
 	}
 
 	return nil
 }
 
 func (m *Manager) UpdateTimerProgress(id uuid.UUID, prog *common.Progress) {
-	m.workers[id].initialProgress = timer.Progress{
+	m.timerDatas[id].initialProgress = timer.Progress{
 		CompletedExecutions: int(prog.CompletedExecutions),
 		LastExecution:       prog.LastExecution.AsTime(),
 	}
 }
 
 func (m *Manager) HasTimer(id uuid.UUID) bool {
-	_, ok := m.workers[id]
+	_, ok := m.timerDatas[id]
 	return ok
 }
 func (m *Manager) RemoveTimer(id uuid.UUID) {
-	worker, ok := m.workers[id]
+	timerData, ok := m.timerDatas[id]
 	if !ok {
 		return
 	}
 
 	if m.Active {
-		worker.cancelFn()
+		timerData.cancelFn()
 	}
 
-	delete(m.workers, id)
+	delete(m.timerDatas, id)
 }
 
 func (m *Manager) Start() {
@@ -124,8 +124,8 @@ func (m *Manager) Start() {
 	}
 	m.Active = true
 
-	for id := range m.workers {
-		m.startWorker(id)
+	for id := range m.timerDatas {
+		m.startTimerData(id)
 	}
 }
 
@@ -135,14 +135,14 @@ func (m *Manager) stop() {
 	}
 	m.Active = false
 
-	for _, worker := range m.workers {
-		worker.cancelFn()
+	for _, timerData := range m.timerDatas {
+		timerData.cancelFn()
 	}
-	m.workers = make(map[uuid.UUID]*worker)
+	m.timerDatas = make(map[uuid.UUID]*timerData)
 }
 
-func (m *Manager) startWorker(id uuid.UUID) {
-	var w = m.workers[id]
+func (m *Manager) startTimerData(id uuid.UUID) {
+	var w = m.timerDatas[id]
 
 	var progressUpdateFunc = func(prog timer.Progress) {
 		var pb = messaging.ExecuteTimer{
@@ -154,7 +154,7 @@ func (m *Manager) startWorker(id uuid.UUID) {
 
 		bytes, err := proto.Marshal(&pb)
 		if err != nil {
-			fmt.Printf("progress update fn worker w/ id %v, err proto.Marshal: %v\n", id, err.Error())
+			fmt.Printf("progress update fn timerData w/ id %v, err proto.Marshal: %v\n", id, err.Error())
 			return
 		}
 
