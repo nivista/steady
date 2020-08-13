@@ -5,9 +5,9 @@ import (
 	"strconv"
 
 	"github.com/Shopify/sarama"
+	"github.com/google/uuid"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/keys"
 	"github.com/nivista/steady/runtimers/coordinator"
 	"google.golang.org/protobuf/proto"
 )
@@ -45,10 +45,16 @@ func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 		// read from beggining
 		session.ResetOffset(c.topic, partition, -1, "")
 
+		key := messaging.Key{Key: &messaging.Key_Dummy_{Dummy: &messaging.Key_Dummy{}}}
+		keyBytes, err := proto.Marshal(&key)
+		if err != nil {
+			panic(err)
+		}
+
 		// send dummy message to know when "present" is
 		c.producer.Input() <- &sarama.ProducerMessage{
 			Topic: c.topic,
-			Key:   keys.NewDummy(),
+			Key:   sarama.ByteEncoder(keyBytes),
 			Value: nil,
 			Headers: []sarama.RecordHeader{{
 				Key:   []byte("generationID"),
@@ -82,26 +88,30 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 	man.GenerationID = strconv.Itoa(int(session.GenerationID()))
 
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key)
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
 		if err != nil {
-			fmt.Println("handling message error:", err.Error())
 			// we didn't mark the message here oops
+			fmt.Println("unmarshal key error:", err)
 			continue
 		}
-
 		var headers = map[string]string{}
 
 		for _, header := range msg.Headers {
 			headers[string(header.Key)] = string(header.Value)
 		}
 
-		switch key := k.(type) {
+		switch k := key.Key.(type) {
 		// A timer Create or Delete
-		case keys.CreateTimer:
+		case *messaging.Key_CreateTimer_:
 			var (
-				id     = key.TimerUUID()
-				domain = key.Domain()
+				id, err = uuid.Parse(k.CreateTimer.TimerUuid)
+				domain  = k.CreateTimer.Domain
 			)
+
+			if err != nil {
+				fmt.Println("unmarshal id err", err)
+			}
 
 			if msg.Value == nil {
 				man.RemoveTimer(id)
@@ -109,7 +119,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 			var timer messaging.CreateTimer
-			err := proto.Unmarshal(msg.Value, &timer)
+			err = proto.Unmarshal(msg.Value, &timer)
 			if err != nil {
 				fmt.Println("consume claim unmarshal timer:", err.Error())
 				break
@@ -122,7 +132,12 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 		// A Progress update or delete
-		case keys.ExecuteTimer:
+		case *messaging.Key_ExecuteTimer_:
+			id, err := uuid.Parse(k.ExecuteTimer.TimerUuid)
+			if err != nil {
+				fmt.Println("unmarshal id execute err:", err)
+			}
+
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
 				delete(staleProgressCandiates, string(msg.Key))
@@ -130,13 +145,11 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 			var prog common.Progress
-			err := proto.Unmarshal(msg.Value, &prog)
+			err = proto.Unmarshal(msg.Value, &prog)
 			if err != nil {
 				fmt.Println("consume claim unmarshal progress:", err.Error())
 				break
 			}
-
-			var id = key.TimerUUID()
 
 			// we're reading historical progress updates to get to the current state
 			if man.HasTimer(id) && !man.Active {
@@ -172,7 +185,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			// there might be a delete just later in the queue
 			staleProgressCandiates[string(msg.Key)] = struct{}{}
 
-		case keys.Dummy:
+		case *messaging.Key_Dummy_:
 			// is this me
 			if headers["generationID"] != man.GenerationID {
 				break

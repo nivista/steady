@@ -6,7 +6,6 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/keys"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -44,11 +43,12 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	fmt.Println(claim.InitialOffset())
+
 	for msg := range claim.Messages() {
-		var k, err = keys.ParseKey(msg.Key)
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
 		if err != nil {
-			fmt.Println("handling message error:", err.Error())
+			fmt.Println("unmarshal key error:", err)
 		}
 
 		fmt.Printf("TOPIC %v, PARTITION %v, OFFSET %v\n", claim.Topic(), claim.Partition(), msg.Offset)
@@ -58,10 +58,12 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			headers[string(h.Key)] = string(h.Value)
 		}
 		fmt.Println("-- HEADERS:", headers)
-		fmt.Println("-- KEY:", string(msg.Key))
-		switch k.(type) {
+		switch k := key.Key.(type) {
 		// A timer Create or Delete
-		case keys.CreateTimer:
+		case *messaging.Key_CreateTimer_:
+			fmt.Println("-- KEY TYPE:", "Create Timer")
+			fmt.Println("-- DOMAIN:", k.CreateTimer.Domain)
+			fmt.Println("-- ID:", k.CreateTimer.TimerUuid)
 			if msg.Value == nil {
 				fmt.Println("-- VALUE: <nil>")
 				break
@@ -82,7 +84,10 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			fmt.Println("-- VALUE:", string(json))
 
 		// A Progress update or delete
-		case keys.ExecuteTimer:
+		case *messaging.Key_ExecuteTimer_:
+			fmt.Println("-- KEY TYPE:", "Execute Timer")
+			fmt.Println("-- DOMAIN:", k.ExecuteTimer.Domain)
+			fmt.Println("-- ID:", k.ExecuteTimer.TimerUuid)
 			if msg.Value == nil {
 				// the timer associated with this progress must've been deleted.
 				fmt.Println("-- VALUE: <nil>")
@@ -102,7 +107,9 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			}
 
 			fmt.Println("-- VALUE:", string(json))
-		case keys.Dummy:
+		case *messaging.Key_Dummy_:
+			fmt.Println("-- KEY TYPE:", "Dummy")
+
 		default:
 			panic("unknown key type")
 		}

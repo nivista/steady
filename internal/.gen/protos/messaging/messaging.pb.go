@@ -136,6 +136,248 @@ func (x *ExecuteTimer) GetProgress() *common.Progress {
 	return nil
 }
 
+type Key struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// Types that are assignable to Key:
+	//	*Key_CreateTimer_
+	//	*Key_ExecuteTimer_
+	//	*Key_Dummy_
+	Key isKey_Key `protobuf_oneof:"key"`
+}
+
+func (x *Key) Reset() {
+	*x = Key{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_protos_internal_messaging_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Key) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Key) ProtoMessage() {}
+
+func (x *Key) ProtoReflect() protoreflect.Message {
+	mi := &file_protos_internal_messaging_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Key.ProtoReflect.Descriptor instead.
+func (*Key) Descriptor() ([]byte, []int) {
+	return file_protos_internal_messaging_proto_rawDescGZIP(), []int{2}
+}
+
+func (m *Key) GetKey() isKey_Key {
+	if m != nil {
+		return m.Key
+	}
+	return nil
+}
+
+func (x *Key) GetCreateTimer() *Key_CreateTimer {
+	if x, ok := x.GetKey().(*Key_CreateTimer_); ok {
+		return x.CreateTimer
+	}
+	return nil
+}
+
+func (x *Key) GetExecuteTimer() *Key_ExecuteTimer {
+	if x, ok := x.GetKey().(*Key_ExecuteTimer_); ok {
+		return x.ExecuteTimer
+	}
+	return nil
+}
+
+func (x *Key) GetDummy() *Key_Dummy {
+	if x, ok := x.GetKey().(*Key_Dummy_); ok {
+		return x.Dummy
+	}
+	return nil
+}
+
+type isKey_Key interface {
+	isKey_Key()
+}
+
+type Key_CreateTimer_ struct {
+	CreateTimer *Key_CreateTimer `protobuf:"bytes,1,opt,name=createTimer,proto3,oneof"`
+}
+
+type Key_ExecuteTimer_ struct {
+	ExecuteTimer *Key_ExecuteTimer `protobuf:"bytes,2,opt,name=executeTimer,proto3,oneof"`
+}
+
+type Key_Dummy_ struct {
+	Dummy *Key_Dummy `protobuf:"bytes,3,opt,name=dummy,proto3,oneof"`
+}
+
+func (*Key_CreateTimer_) isKey_Key() {}
+
+func (*Key_ExecuteTimer_) isKey_Key() {}
+
+func (*Key_Dummy_) isKey_Key() {}
+
+type Key_CreateTimer struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Domain    string `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	TimerUuid string `protobuf:"bytes,2,opt,name=timer_uuid,json=timerUuid,proto3" json:"timer_uuid,omitempty"`
+}
+
+func (x *Key_CreateTimer) Reset() {
+	*x = Key_CreateTimer{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_protos_internal_messaging_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Key_CreateTimer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Key_CreateTimer) ProtoMessage() {}
+
+func (x *Key_CreateTimer) ProtoReflect() protoreflect.Message {
+	mi := &file_protos_internal_messaging_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Key_CreateTimer.ProtoReflect.Descriptor instead.
+func (*Key_CreateTimer) Descriptor() ([]byte, []int) {
+	return file_protos_internal_messaging_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *Key_CreateTimer) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *Key_CreateTimer) GetTimerUuid() string {
+	if x != nil {
+		return x.TimerUuid
+	}
+	return ""
+}
+
+type Key_ExecuteTimer struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Domain    string `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"`
+	TimerUuid string `protobuf:"bytes,2,opt,name=timer_uuid,json=timerUuid,proto3" json:"timer_uuid,omitempty"`
+}
+
+func (x *Key_ExecuteTimer) Reset() {
+	*x = Key_ExecuteTimer{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_protos_internal_messaging_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Key_ExecuteTimer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Key_ExecuteTimer) ProtoMessage() {}
+
+func (x *Key_ExecuteTimer) ProtoReflect() protoreflect.Message {
+	mi := &file_protos_internal_messaging_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Key_ExecuteTimer.ProtoReflect.Descriptor instead.
+func (*Key_ExecuteTimer) Descriptor() ([]byte, []int) {
+	return file_protos_internal_messaging_proto_rawDescGZIP(), []int{2, 1}
+}
+
+func (x *Key_ExecuteTimer) GetDomain() string {
+	if x != nil {
+		return x.Domain
+	}
+	return ""
+}
+
+func (x *Key_ExecuteTimer) GetTimerUuid() string {
+	if x != nil {
+		return x.TimerUuid
+	}
+	return ""
+}
+
+type Key_Dummy struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+}
+
+func (x *Key_Dummy) Reset() {
+	*x = Key_Dummy{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_protos_internal_messaging_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Key_Dummy) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Key_Dummy) ProtoMessage() {}
+
+func (x *Key_Dummy) ProtoReflect() protoreflect.Message {
+	mi := &file_protos_internal_messaging_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Key_Dummy.ProtoReflect.Descriptor instead.
+func (*Key_Dummy) Descriptor() ([]byte, []int) {
+	return file_protos_internal_messaging_proto_rawDescGZIP(), []int{2, 2}
+}
+
 var File_protos_internal_messaging_proto protoreflect.FileDescriptor
 
 var file_protos_internal_messaging_proto_rawDesc = []byte{
@@ -152,11 +394,31 @@ var file_protos_internal_messaging_proto_rawDesc = []byte{
 	0x74, 0x61, 0x22, 0x35, 0x0a, 0x0c, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x54, 0x69, 0x6d,
 	0x65, 0x72, 0x12, 0x25, 0x0a, 0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x0b, 0x32, 0x09, 0x2e, 0x50, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x52,
-	0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74,
-	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6e, 0x69, 0x76, 0x69, 0x73, 0x74, 0x61, 0x2f,
-	0x73, 0x74, 0x65, 0x61, 0x64, 0x79, 0x2f, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f,
-	0x2e, 0x67, 0x65, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x73, 0x2f, 0x6d, 0x65, 0x73, 0x73,
-	0x61, 0x67, 0x69, 0x6e, 0x67, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x08, 0x70, 0x72, 0x6f, 0x67, 0x72, 0x65, 0x73, 0x73, 0x22, 0xb5, 0x02, 0x0a, 0x03, 0x4b, 0x65,
+	0x79, 0x12, 0x34, 0x0a, 0x0b, 0x63, 0x72, 0x65, 0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72,
+	0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x4b, 0x65, 0x79, 0x2e, 0x43, 0x72, 0x65,
+	0x61, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72, 0x48, 0x00, 0x52, 0x0b, 0x63, 0x72, 0x65, 0x61,
+	0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72, 0x12, 0x37, 0x0a, 0x0c, 0x65, 0x78, 0x65, 0x63, 0x75,
+	0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x11, 0x2e,
+	0x4b, 0x65, 0x79, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72,
+	0x48, 0x00, 0x52, 0x0c, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72,
+	0x12, 0x22, 0x0a, 0x05, 0x64, 0x75, 0x6d, 0x6d, 0x79, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x0a, 0x2e, 0x4b, 0x65, 0x79, 0x2e, 0x44, 0x75, 0x6d, 0x6d, 0x79, 0x48, 0x00, 0x52, 0x05, 0x64,
+	0x75, 0x6d, 0x6d, 0x79, 0x1a, 0x44, 0x0a, 0x0b, 0x43, 0x72, 0x65, 0x61, 0x74, 0x65, 0x54, 0x69,
+	0x6d, 0x65, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x06, 0x64, 0x6f, 0x6d, 0x61, 0x69, 0x6e, 0x12, 0x1d, 0x0a, 0x0a, 0x74,
+	0x69, 0x6d, 0x65, 0x72, 0x5f, 0x75, 0x75, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x09, 0x74, 0x69, 0x6d, 0x65, 0x72, 0x55, 0x75, 0x69, 0x64, 0x1a, 0x45, 0x0a, 0x0c, 0x45, 0x78,
+	0x65, 0x63, 0x75, 0x74, 0x65, 0x54, 0x69, 0x6d, 0x65, 0x72, 0x12, 0x16, 0x0a, 0x06, 0x64, 0x6f,
+	0x6d, 0x61, 0x69, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x06, 0x64, 0x6f, 0x6d, 0x61,
+	0x69, 0x6e, 0x12, 0x1d, 0x0a, 0x0a, 0x74, 0x69, 0x6d, 0x65, 0x72, 0x5f, 0x75, 0x75, 0x69, 0x64,
+	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x74, 0x69, 0x6d, 0x65, 0x72, 0x55, 0x75, 0x69,
+	0x64, 0x1a, 0x07, 0x0a, 0x05, 0x44, 0x75, 0x6d, 0x6d, 0x79, 0x42, 0x05, 0x0a, 0x03, 0x6b, 0x65,
+	0x79, 0x42, 0x3a, 0x5a, 0x38, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f,
+	0x6e, 0x69, 0x76, 0x69, 0x73, 0x74, 0x61, 0x2f, 0x73, 0x74, 0x65, 0x61, 0x64, 0x79, 0x2f, 0x69,
+	0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x2f, 0x2e, 0x67, 0x65, 0x6e, 0x2f, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x73, 0x2f, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x69, 0x6e, 0x67, 0x62, 0x06, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -171,25 +433,32 @@ func file_protos_internal_messaging_proto_rawDescGZIP() []byte {
 	return file_protos_internal_messaging_proto_rawDescData
 }
 
-var file_protos_internal_messaging_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_protos_internal_messaging_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_protos_internal_messaging_proto_goTypes = []interface{}{
-	(*CreateTimer)(nil),     // 0: CreateTimer
-	(*ExecuteTimer)(nil),    // 1: ExecuteTimer
-	(*common.Task)(nil),     // 2: Task
-	(*common.Schedule)(nil), // 3: Schedule
-	(*common.Meta)(nil),     // 4: Meta
-	(*common.Progress)(nil), // 5: Progress
+	(*CreateTimer)(nil),      // 0: CreateTimer
+	(*ExecuteTimer)(nil),     // 1: ExecuteTimer
+	(*Key)(nil),              // 2: Key
+	(*Key_CreateTimer)(nil),  // 3: Key.CreateTimer
+	(*Key_ExecuteTimer)(nil), // 4: Key.ExecuteTimer
+	(*Key_Dummy)(nil),        // 5: Key.Dummy
+	(*common.Task)(nil),      // 6: Task
+	(*common.Schedule)(nil),  // 7: Schedule
+	(*common.Meta)(nil),      // 8: Meta
+	(*common.Progress)(nil),  // 9: Progress
 }
 var file_protos_internal_messaging_proto_depIdxs = []int32{
-	2, // 0: CreateTimer.task:type_name -> Task
-	3, // 1: CreateTimer.schedule:type_name -> Schedule
-	4, // 2: CreateTimer.meta:type_name -> Meta
-	5, // 3: ExecuteTimer.progress:type_name -> Progress
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	6, // 0: CreateTimer.task:type_name -> Task
+	7, // 1: CreateTimer.schedule:type_name -> Schedule
+	8, // 2: CreateTimer.meta:type_name -> Meta
+	9, // 3: ExecuteTimer.progress:type_name -> Progress
+	3, // 4: Key.createTimer:type_name -> Key.CreateTimer
+	4, // 5: Key.executeTimer:type_name -> Key.ExecuteTimer
+	5, // 6: Key.dummy:type_name -> Key.Dummy
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_protos_internal_messaging_proto_init() }
@@ -222,6 +491,59 @@ func file_protos_internal_messaging_proto_init() {
 				return nil
 			}
 		}
+		file_protos_internal_messaging_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Key); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_protos_internal_messaging_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Key_CreateTimer); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_protos_internal_messaging_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Key_ExecuteTimer); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_protos_internal_messaging_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Key_Dummy); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+	}
+	file_protos_internal_messaging_proto_msgTypes[2].OneofWrappers = []interface{}{
+		(*Key_CreateTimer_)(nil),
+		(*Key_ExecuteTimer_)(nil),
+		(*Key_Dummy_)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -229,7 +551,7 @@ func file_protos_internal_messaging_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_protos_internal_messaging_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

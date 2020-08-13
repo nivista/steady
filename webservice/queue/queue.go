@@ -4,7 +4,6 @@ import (
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/keys"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -37,9 +36,23 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 		return err
 	}
 
+	key := messaging.Key{
+		Key: &messaging.Key_CreateTimer_{
+			CreateTimer: &messaging.Key_CreateTimer{
+				Domain:    domain,
+				TimerUuid: timerID.String(),
+			},
+		},
+	}
+
+	keyBytes, err := proto.Marshal(&key)
+	if err != nil {
+		return err
+	}
+
 	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       keys.NewCreateTimer(domain, timerID),
+		Key:       sarama.ByteEncoder(keyBytes),
 		Value:     sarama.ByteEncoder(bytes),
 		Partition: c.bytesToPartition(timerID),
 	})
@@ -48,9 +61,23 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 }
 
 func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
-	_, _, err := c.producer.SendMessage(&sarama.ProducerMessage{
+	key := messaging.Key{
+		Key: &messaging.Key_CreateTimer_{
+			CreateTimer: &messaging.Key_CreateTimer{
+				Domain:    domain,
+				TimerUuid: timerID.String(),
+			},
+		},
+	}
+
+	keyBytes, err := proto.Marshal(&key)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       keys.NewCreateTimer(domain, timerID),
+		Key:       sarama.ByteEncoder(keyBytes),
 		Value:     nil,
 		Partition: c.bytesToPartition(timerID),
 	})

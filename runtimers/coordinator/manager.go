@@ -8,7 +8,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/keys"
 	"github.com/nivista/steady/timer"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -53,10 +52,37 @@ func (m *Manager) AddTimer(id uuid.UUID, domain string, t *messaging.CreateTimer
 		return err
 	}
 
+	createKey := messaging.Key{
+		Key: &messaging.Key_CreateTimer_{
+			CreateTimer: &messaging.Key_CreateTimer{
+				Domain:    domain,
+				TimerUuid: id.String(),
+			},
+		},
+	}
+
+	createKeyBytes, err := proto.Marshal(&createKey)
+
+	if err != nil {
+		return nil
+	}
+
+	executeKey := messaging.Key{
+		Key: &messaging.Key_ExecuteTimer_{
+			ExecuteTimer: &messaging.Key_ExecuteTimer{
+				Domain:    domain,
+				TimerUuid: id.String(),
+			},
+		},
+	}
+	executeKeyBytes, err := proto.Marshal(&executeKey)
+	if err != nil {
+		return nil
+	}
 	m.workers[id] = &worker{
 		timer:            &timer,
-		timerKey:         keys.NewCreateTimer(domain, id),
-		timerProgressKey: keys.NewExecuteTimer(domain, id),
+		timerKey:         sarama.ByteEncoder(createKeyBytes),
+		timerProgressKey: sarama.ByteEncoder(executeKeyBytes),
 	}
 
 	if m.Active {
