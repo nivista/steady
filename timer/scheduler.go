@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
@@ -33,6 +34,7 @@ func (c cron) schedule(prog Progress, now time.Time) (nextFire time.Time, done b
 
 	for {
 		nextFire = c.sched.Next(nextFire)
+		fmt.Println(c.stopTime)
 		if c.stopTime.IsZero() && nextFire.After(c.stopTime) {
 			done = true
 			return

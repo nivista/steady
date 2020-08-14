@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/nivista/steady/.gen/protos/common"
@@ -28,6 +29,7 @@ func NewServer(db db.Client, queue queue.Client) services.SteadyServer {
 func (s *server) CreateTimer(ctx context.Context, req *services.CreateTimerRequest) (*services.CreateTimerResponse, error) {
 	// TODO validate schedule execter, etc.
 
+	fmt.Println(req.Schedule.StartTime)
 	// if starttime is unset, starttime = now
 	if req.Schedule.StartTime.AsTime().IsZero() {
 		req.Schedule.StartTime = timestamppb.Now()
