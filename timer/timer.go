@@ -1,48 +1,35 @@
 package timer
 
 import (
-	"errors"
-	"fmt"
-	"sync/atomic"
-	"time"
-
 	"github.com/jonboulle/clockwork"
-	"github.com/nivista/steady/.gen/protos/common"
-	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
+	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+
+	"github.com/nivista/steady/timer/executer"
+	"github.com/nivista/steady/timer/scheduler"
+	"go.uber.org/atomic"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type (
 	// Timer represents the configuration for the execution of a recurring task.
-	Timer struct {
-		executer  executer
-		scheduler scheduler
+	Timer interface {
+		Run(executeTimer func(*execute.Value), finishTimer func(), initialProgress *execute.Progress, clock clockwork.Clock) (cancel func())
 	}
 
-	// Progress records the progress of a recurring task.
-	Progress struct {
-		// CompletedExecutions indicated the number of successfully completed executions.
-		CompletedExecutions int
-
-		// LastExecution indicates which execution was recorded last.
-		LastExecution time.Time
-	}
-
-	executer interface {
-		execute()
-	}
-
-	scheduler interface {
-		schedule(prog Progress, now time.Time) (nextFire time.Time, done bool)
+	timer struct {
+		executer  executer.Executer
+		scheduler scheduler.Scheduler
 	}
 )
 
 func getCanceller() (cancelled <-chan struct{}, cancel func()) {
-	var stopped int32
+	var stopped atomic.Bool
 
 	ch := make(chan struct{})
 
 	cancel = func() {
-		if atomic.CompareAndSwapInt32(&stopped, 0, 1) {
+		if stopped.Swap(true) {
 			close(ch)
 		}
 	}
@@ -51,28 +38,32 @@ func getCanceller() (cancelled <-chan struct{}, cancel func()) {
 }
 
 // Run starts the timers execution.
-func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialProgress Progress, clock clockwork.Clock) (cancel func()) {
+func (t *timer) Run(executeTimer func(*execute.Value), finishTimer func(), initialProgress *execute.Progress, clock clockwork.Clock) (cancel func()) {
 
 	var progress = initialProgress
-
+	if progress == nil {
+		progress = &execute.Progress{}
+	}
 	cancelled, cancel := getCanceller()
 
 	go func() {
 		for {
-			nextFire, done := t.scheduler.schedule(progress, clock.Now())
+			nextFire, done := t.scheduler.Schedule(progress, clock.Now())
 
 			if done {
 				finishTimer()
-				cancel()
 				return
 			}
 
 			select {
-			case <-clock.After(nextFire.Sub(clock.Now())):
-				t.executer.execute()
+			case currentFire := <-clock.After(nextFire.Sub(clock.Now())):
+				res := t.executer.Execute()
 				progress.CompletedExecutions++
-				progress.LastExecution = nextFire
-				updateProgress(progress)
+				progress.LastExecution = timestamppb.New(currentFire)
+				executeTimer(&execute.Value{
+					Progress: progress,
+					Result:   res,
+				})
 
 			case <-cancelled:
 				return
@@ -84,37 +75,16 @@ func (t *Timer) Run(updateProgress func(Progress), finishTimer func(), initialPr
 	return cancel
 }
 
-// FromMessageProto gets a Timer from a messaging.CreateTimer.
-func (t *Timer) FromMessageProto(p *messaging.CreateTimer) error {
-	if p.Task == nil {
-		return errors.New("(*Timer)FromMessageProto got nil Task")
-	}
+// New creates a Timer from a *messaging.CreateTimer.
+func New(p *create.Value) (Timer, error) {
+	var t timer
 
-	if p.Schedule == nil {
-		return errors.New("(*Timer)FromMessageProto got nil Schedule")
-	}
+	t.executer = executer.New(p.Task)
 
-	var newTimer Timer
-
-	switch task := p.Task.Task.(type) {
-	case *common.Task_HttpConfig:
-		var h http
-		if err := h.fromProto(task); err != nil {
-			return err
-		}
-		newTimer.executer = h
-	default:
-		return errors.New("(*Timer)FromMessageProto got unknown Task")
-	}
-
-	var c cron
-	err := c.fromProto(p.Schedule)
+	var err error
+	t.scheduler, err = scheduler.New(p.Schedule)
 	if err != nil {
-		return fmt.Errorf("(*Timer)FromMessageProto: %w", err)
+		return nil, err
 	}
-
-	newTimer.scheduler = c
-
-	*t = newTimer
-	return nil
+	return &t, nil
 }

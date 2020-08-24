@@ -26,7 +26,7 @@ var (
 
 const (
 	postgresURL  = "POSTGRES_URL"
-	kafkaTopic   = "KAFKA_TOPIC"
+	createTopic  = "KAFKA_TOPIC"
 	partitions   = "PARTITIONS"
 	kafkaBrokers = "KAFKA_BROKERS"
 	kafkaVersion = "KAFKA_VERSION"
@@ -35,7 +35,7 @@ const (
 
 func main() {
 	viper.SetDefault(postgresURL, "postgresql://")
-	viper.SetDefault(kafkaTopic, "timers")
+	viper.SetDefault(createTopic, "create")
 	viper.SetDefault(partitions, 1)
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
 	viper.SetDefault(kafkaVersion, "2.2.1")
@@ -70,7 +70,7 @@ func main() {
 		panic(err)
 	}
 
-	queueClient := queue.NewClient(producer, viper.GetInt32(partitions), viper.GetString(kafkaTopic))
+	queueClient := queue.NewClient(producer, viper.GetInt32(partitions), viper.GetString(createTopic))
 
 	// set up database
 	ctx, cancel := context.WithCancel(context.Background())

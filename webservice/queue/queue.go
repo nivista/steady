@@ -5,14 +5,16 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
-	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
+	"github.com/nivista/steady/internal/.gen/protos/timerpk"
+
 	"google.golang.org/protobuf/proto"
 )
 
 type (
 	// Client represents a synchrounous client to the queue.
 	Client interface {
-		PublishCreate(domain string, timerID uuid.UUID, timer *messaging.CreateTimer) error
+		PublishCreate(domain string, timerID uuid.UUID, timer *create.Value) error
 		PublishDelete(domain string, timerID uuid.UUID) error
 	}
 
@@ -32,19 +34,15 @@ func NewClient(producer sarama.SyncProducer, partitions int32, topic string) Cli
 	}
 }
 
-func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messaging.CreateTimer) error {
+func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *create.Value) error {
 	bytes, err := proto.Marshal(timer)
 	if err != nil {
 		return err
 	}
 
-	key := messaging.Key{
-		Key: &messaging.Key_CreateTimer_{
-			CreateTimer: &messaging.Key_CreateTimer{
-				Domain:    domain,
-				TimerUuid: timerID.String(),
-			},
-		},
+	key := timerpk.Key{
+		Domain:    domain,
+		TimerUuid: timerID.String(),
 	}
 
 	keyBytes, err := proto.Marshal(&key)
@@ -65,13 +63,9 @@ func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messagin
 }
 
 func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
-	key := messaging.Key{
-		Key: &messaging.Key_CreateTimer_{
-			CreateTimer: &messaging.Key_CreateTimer{
-				Domain:    domain,
-				TimerUuid: timerID.String(),
-			},
-		},
+	key := timerpk.Key{
+		Domain:    domain,
+		TimerUuid: timerID.String(),
 	}
 
 	keyBytes, err := proto.Marshal(&key)

@@ -11,7 +11,10 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/steady/kafkareader/consumer"
+	"github.com/elastic/go-elasticsearch"
+	"github.com/nivista/steady/elastic/consumer"
+	"github.com/nivista/steady/elastic/db"
+
 	"github.com/spf13/viper"
 )
 
@@ -20,23 +23,23 @@ var (
 )
 
 const (
-	createTopic  = "CREATE_TOPIC"
-	executeTopic = "EXECUTE_TOPIC"
-
-	nodeID       = "NODE_ID"
-	kafkaBrokers = "KAFKA_BROKERS"
-	kafkaVersion = "KAFKA_VERSION"
-	kafkaGroupID = "KAFKA_GROUP_ID"
+	elasticURL             = "ELASTIC_URL"
+	elasticExecutionsIndex = "EXECUTIONS"
+	elasticProgressIndex   = "PROGRESS"
+	executeTopic           = "EXECUTE_TOPIC"
+	kafkaBrokers           = "KAFKA_BROKERS"
+	kafkaVersion           = "KAFKA_VERSION"
+	kafkaGroupID           = "KAFKA_GROUP_ID"
 )
 
 func main() {
-	viper.SetDefault(createTopic, "create")
+	viper.SetDefault(elasticURL, "http://localhost:9200")
+	viper.SetDefault(elasticExecutionsIndex, "executions")
+	viper.SetDefault(elasticProgressIndex, "progress")
 	viper.SetDefault(executeTopic, "execute")
-
-	viper.SetDefault(nodeID, "")
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
 	viper.SetDefault(kafkaVersion, "2.2.1")
-	viper.SetDefault(kafkaGroupID, "reader")
+	viper.SetDefault(kafkaGroupID, "elastic")
 
 	if *configURL != "" {
 		viper.AddConfigPath(*configURL)
@@ -48,6 +51,20 @@ func main() {
 			}
 		}
 	}
+
+	// set up database
+	ctx, cancel := context.WithCancel(context.Background())
+
+	elasticCfg := elasticsearch.Config{
+		Addresses: []string{viper.GetString(elasticURL)},
+	}
+
+	elasticClient, err := elasticsearch.NewClient(elasticCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	db := db.NewClient(elasticClient, viper.GetString(elasticExecutionsIndex), viper.GetString(elasticProgressIndex))
 	// Get Kafka Version
 	version, err := sarama.ParseKafkaVersion(viper.GetString("KAFKA_VERSION"))
 	if err != nil {
@@ -57,13 +74,7 @@ func main() {
 	// Kafka configuration
 	config := sarama.NewConfig()
 	config.Version = version
-	config.Producer.RequiredAcks = sarama.NoResponse
-	config.Producer.Retry.Max = 10
-	config.Producer.Return.Successes = true
-	config.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	// set up consumer
-	consumer := consumer.NewConsumer(viper.GetString(nodeID), viper.GetString(createTopic), viper.GetString(executeTopic))
+	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 
 	// set up consumer group
 	client, err := sarama.NewConsumerGroup(viper.GetStringSlice(kafkaBrokers), viper.GetString(kafkaGroupID), config)
@@ -71,15 +82,18 @@ func main() {
 		panic(err)
 	}
 
+	// set up consumer
+	consumer := consumer.NewConsumer(db)
+
 	// consume
-	ctx, cancel := context.WithCancel(context.Background())
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for {
-			if err := client.Consume(ctx, []string{viper.GetString(createTopic), viper.GetString(executeTopic)}, consumer); err != nil {
+			if err := client.Consume(ctx, []string{viper.GetString(executeTopic)}, consumer); err != nil {
 				// panic if the consumer stops working
+				// maybe instead send a signal and then cancel context?
 				log.Panicf("Error from consumer: %v", err)
 			}
 			if ctx.Err() != nil {
@@ -100,4 +114,5 @@ func main() {
 	if err = client.Close(); err != nil {
 		log.Panicf("Error closing client: %v", err)
 	}
+
 }

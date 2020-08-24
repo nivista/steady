@@ -1,0 +1,16 @@
+syntax = "proto3";
+package messaging.execute;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging/execute";
+
+message Value {
+    Progress progress = 1;
+    bytes result = 2;
+}
+
+message Progress {
+    int32 completedExecutions = 1;
+    google.protobuf.Timestamp lastExecution = 2;
+}

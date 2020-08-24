@@ -19,7 +19,7 @@ type (
 	}
 )
 
-const getTimerString = `select progress, task, schedule, meta from timers 
+const getTimerString = `select task, schedule, meta from timers 
 					where domain=$1 and id=$2`
 
 // NewClient returns a new Client.
@@ -35,7 +35,7 @@ func (c *client) GetTimer(ctx context.Context, req *services.GetTimerRequest) (*
 		taskBytes, scheduleBytes []byte
 	)
 	err := c.conn.QueryRow(ctx, getTimerString,
-		domain, id).Scan(&res.Progress, &taskBytes, &scheduleBytes, &res.Meta)
+		domain, id).Scan(&taskBytes, &scheduleBytes, &res.Meta)
 
 	if err != nil {
 		return nil, err

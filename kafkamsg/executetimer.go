@@ -9,9 +9,10 @@ import (
 )
 
 type ExecuteTimer struct {
-	Topic        string
-	Partition    int32
-	GenerationID int32
+	Msg          *sarama.ConsumerMessage
+	Domain       string
+	ID           string
+	GenerationID string
 	Value        *messaging.ExecuteTimer
 }
 
@@ -43,20 +44,4 @@ func (e *ExecuteTimer) FromConsumerMessage(msg *sarama.ConsumerMessage) error {
 
 	*e = out
 	return nil
-}
-func (e *ExecuteTimer) ToProducerMessage() (*sarama.ProducerMessage, error) {
-	var out sarama.ProducerMessage
-	out.Headers = append(out.Headers, sarama.RecordHeader{
-		Key:   []byte(generationID),
-		Value: []byte(strconv.Itoa(int(e.GenerationID))),
-	})
-
-	out.Partition = e.Partition
-
-	out.Topic = e.Topic
-
-	if e.Value == nil {
-		return &out, nil
-	}
-
 }

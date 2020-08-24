@@ -4,33 +4,37 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/steady/.gen/protos/common"
-	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"google.golang.org/protobuf/encoding/protojson"
+	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
+
+	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+	"github.com/nivista/steady/internal/.gen/protos/timerpk"
+
 	"google.golang.org/protobuf/proto"
 )
 
 // Consumer consumes from Kafka and logs the contents.
 type Consumer struct {
-	nodeID string
-	topic  string
+	nodeID, createTopic, executeTopic string
 }
 
 // NewConsumer returns a new Consumer.
-func NewConsumer(nodeID, topic string) sarama.ConsumerGroupHandler {
+func NewConsumer(nodeID, createTopic, executeTopic string) sarama.ConsumerGroupHandler {
 	return &Consumer{
-		nodeID: nodeID,
-		topic:  topic,
+		nodeID:       nodeID,
+		createTopic:  createTopic,
+		executeTopic: executeTopic,
 	}
 }
 
 // Setup is run at the beginning of a new session, before ConsumeClaim
 func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
-	partitions := session.Claims()[c.topic]
 
-	for _, partition := range partitions {
-		session.ResetOffset(c.topic, partition, -1, "")
+	for topic, partitions := range session.Claims() {
+		fmt.Println(topic, partitions)
+		for _, partition := range partitions {
+			session.ResetOffset(topic, partition, -1, "")
 
+		}
 	}
 
 	return nil
@@ -43,79 +47,83 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	switch claim.Topic() {
+	case c.createTopic:
+		c.consumeCreates(claim)
 
+	case c.executeTopic:
+		c.consumeExecutes(claim)
+
+	default:
+		fmt.Println("unknown topic")
+	}
+	return nil
+}
+
+func (c *Consumer) consumeCreates(claim sarama.ConsumerGroupClaim) {
 	for msg := range claim.Messages() {
-		var key messaging.Key
-		err := proto.Unmarshal(msg.Key, &key)
-		if err != nil {
-			fmt.Println("unmarshal key error:", err)
-		}
-
 		fmt.Printf("TOPIC %v, PARTITION %v, OFFSET %v\n", claim.Topic(), claim.Partition(), msg.Offset)
 
-		headers := map[string]string{}
-		for _, h := range msg.Headers {
-			headers[string(h.Key)] = string(h.Value)
-		}
-		fmt.Println("-- HEADERS:", headers)
-		switch k := key.Key.(type) {
-		// A timer Create or Delete
-		case *messaging.Key_CreateTimer_:
-			fmt.Println("-- KEY TYPE:", "Create Timer")
-			fmt.Println("-- DOMAIN:", k.CreateTimer.Domain)
-			fmt.Println("-- ID:", k.CreateTimer.TimerUuid)
-			if msg.Value == nil {
-				fmt.Println("-- VALUE: <nil>")
-				break
-			}
-
-			var timer messaging.CreateTimer
-			err := proto.Unmarshal(msg.Value, &timer)
-			if err != nil {
-				fmt.Println("consume claim unmarshal timer:", err.Error())
-				break
-			}
-
-			json, err := protojson.Marshal(&timer)
-			if err != nil {
-				fmt.Println("err marshalling to jsaon")
-			}
-
-			fmt.Println("-- VALUE:", string(json))
-
-		// A Progress update or delete
-		case *messaging.Key_ExecuteTimer_:
-			fmt.Println("-- KEY TYPE:", "Execute Timer")
-			fmt.Println("-- DOMAIN:", k.ExecuteTimer.Domain)
-			fmt.Println("-- ID:", k.ExecuteTimer.TimerUuid)
-			if msg.Value == nil {
-				// the timer associated with this progress must've been deleted.
-				fmt.Println("-- VALUE: <nil>")
-				break
-			}
-
-			var prog common.Progress
-			err := proto.Unmarshal(msg.Value, &prog)
-			if err != nil {
-				fmt.Println("consume claim unmarshal progress:", err.Error())
-				break
-			}
-
-			json, err := protojson.Marshal(&prog)
-			if err != nil {
-				fmt.Println("err marshalling to jsaon")
-			}
-
-			fmt.Println("-- VALUE:", string(json))
-		case *messaging.Key_Dummy_:
-			fmt.Println("-- KEY TYPE:", "Dummy")
-
-		default:
-			panic("unknown key type")
+		if msg.Key == nil {
+			fmt.Println("-- DUMMY")
+			continue
 		}
 
-		session.MarkMessage(msg, "")
+		var key timerpk.Key
+		err := proto.Unmarshal(msg.Key, &key)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		fmt.Println("-- DOMAIN:", key.Domain)
+		fmt.Println("-- ID:", key.TimerUuid)
+
+		if msg.Value == nil {
+			fmt.Println("-- DELETE")
+		}
+
+		var val create.Value
+		err = proto.Unmarshal(msg.Value, &val)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		fmt.Println("-- VALUE:", val)
 	}
+}
 
-	return nil
+func (c *Consumer) consumeExecutes(claim sarama.ConsumerGroupClaim) {
+	for msg := range claim.Messages() {
+		fmt.Printf("TOPIC %v, PARTITION %v, OFFSET %v\n", claim.Topic(), claim.Partition(), msg.Offset)
+
+		if msg.Key == nil {
+			fmt.Println("-- NIL KEY")
+			continue
+		}
+
+		var key timerpk.Key
+		err := proto.Unmarshal(msg.Key, &key)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		fmt.Println("-- DOMAIN:", key.Domain)
+		fmt.Println("-- ID:", key.TimerUuid)
+
+		if msg.Value == nil {
+			fmt.Println("-- DELETE EXECUTE")
+		}
+
+		var val execute.Value
+		err = proto.Unmarshal(msg.Value, &val)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		fmt.Println("-- VALUE:", val)
+	}
 }

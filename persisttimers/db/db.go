@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -14,7 +13,7 @@ type (
 	// Client is a client to the database.
 	Client interface {
 		CreateTimer(ctx context.Context, domain string, id uuid.UUID, timer *messaging.CreateTimer) error
-		UpdateTimerProgress(ctx context.Context, domain string, id uuid.UUID, progress *common.Progress) error
+		UpdateTimerProgress(ctx context.Context, domain string, id uuid.UUID, progress *messaging.Progress) error
 		FinishTimer(ctx context.Context, domain string, id uuid.UUID) error
 	}
 
@@ -55,7 +54,7 @@ func (c *client) CreateTimer(ctx context.Context, domain string, id uuid.UUID, t
 	}
 
 	// initialized with empty progress
-	prog, err := protojson.Marshal(&common.Progress{})
+	prog, err := protojson.Marshal(&messaging.Progress{})
 	if err != nil {
 		return err
 	}
@@ -71,7 +70,7 @@ func (c *client) CreateTimer(ctx context.Context, domain string, id uuid.UUID, t
 	return err
 }
 
-func (c *client) UpdateTimerProgress(ctx context.Context, domain string, id uuid.UUID, progress *common.Progress) error {
+func (c *client) UpdateTimerProgress(ctx context.Context, domain string, id uuid.UUID, progress *messaging.Progress) error {
 	progBytes, err := protojson.Marshal(progress)
 	if err != nil {
 		return err

@@ -3,23 +3,27 @@ package coordinator
 import (
 	"github.com/Shopify/sarama"
 	"github.com/jonboulle/clockwork"
+	"github.com/nivista/steady/runtimers/db"
 )
 
 // Coordinator hands out managers and stops them for repartitions.
 // Maybe the coordinator should just hand out managers and we deal w/ repartitions in the consumer.
 type Coordinator struct {
-	producer sarama.AsyncProducer
-	managers map[int32]*Manager
-	topic    string
-	clock    clockwork.Clock
+	producer                  sarama.AsyncProducer
+	db                        db.Client
+	managers                  map[int32]*Manager
+	createTopic, executeTopic string
+	clock                     clockwork.Clock
 }
 
-func NewCoordinator(producer sarama.AsyncProducer, topic string, clock clockwork.Clock) *Coordinator {
+func NewCoordinator(producer sarama.AsyncProducer, db db.Client, createTopic, executeTopic string, clock clockwork.Clock) *Coordinator {
 	coord := &Coordinator{
-		producer: producer,
-		managers: map[int32]*Manager{},
-		topic:    topic,
-		clock:    clock,
+		producer:     producer,
+		db:           db,
+		managers:     map[int32]*Manager{},
+		createTopic:  createTopic,
+		executeTopic: executeTopic,
+		clock:        clock,
 	}
 
 	return coord
@@ -47,7 +51,7 @@ func (c *Coordinator) HandleRepartition(newPartitions []int32) {
 
 func (c *Coordinator) GetManager(partition int32) *Manager {
 	if _, ok := c.managers[partition]; !ok {
-		c.managers[partition] = newManager(c.producer.Input(), c.topic, partition, c.clock)
+		c.managers[partition] = newManager(c.producer.Input(), c.db, c.createTopic, c.executeTopic, partition, c.clock)
 	}
 	return c.managers[partition]
 }

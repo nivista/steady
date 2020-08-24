@@ -6,6 +6,8 @@ require github.com/google/uuid v1.1.1
 
 require (
 	github.com/Shopify/sarama v1.26.4
+	github.com/elastic/go-elasticsearch v0.0.0
+	github.com/elastic/go-elasticsearch/v8 v8.0.0-20200819071622-59b6a186f8dd
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/golang/protobuf v1.4.2
 	github.com/jackc/pgx/v4 v4.6.0
@@ -23,6 +25,7 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.7.1
+	go.uber.org/atomic v1.4.0
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de // indirect
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381 // indirect
 	golang.org/x/sys v0.0.0-20200808120158-1030fc2bf1d9 // indirect

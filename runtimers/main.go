@@ -11,9 +11,11 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
+	elasticsearch "github.com/elastic/go-elasticsearch/v8"
 	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/runtimers/consumer"
 	"github.com/nivista/steady/runtimers/coordinator"
+	"github.com/nivista/steady/runtimers/db"
 	"github.com/spf13/viper"
 )
 
@@ -22,16 +24,22 @@ var (
 )
 
 const (
-	kafkaTopic   = "KAFKA_TOPIC"
-	partitions   = "PARTITIONS"
-	nodeID       = "NODE_ID"
-	kafkaBrokers = "KAFKA_BROKERS"
-	kafkaVersion = "KAFKA_VERSION"
-	kafkaGroupID = "KAFKA_GROUP_ID"
+	createTopic          = "CREATE_TOPIC"
+	executeTopic         = "EXECUTE_TOPIC"
+	partitions           = "PARTITIONS"
+	nodeID               = "NODE_ID"
+	kafkaBrokers         = "KAFKA_BROKERS"
+	kafkaVersion         = "KAFKA_VERSION"
+	kafkaGroupID         = "KAFKA_GROUP_ID"
+	elasticURL           = "ELASTIC_URL"
+	elasticProgressIndex = "ELASTIC_PROGRESS_INDEX"
 )
 
 func main() {
-	viper.SetDefault(kafkaTopic, "timers")
+	viper.SetDefault(createTopic, "create")
+	viper.SetDefault(executeTopic, "execute")
+	viper.SetDefault(elasticURL, "http://localhost:9200")
+	viper.SetDefault(elasticProgressIndex, "progress")
 	viper.SetDefault(partitions, 1)
 	viper.SetDefault(nodeID, "")
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
@@ -48,6 +56,18 @@ func main() {
 			}
 		}
 	}
+
+	// set up elastic
+	elasticCfg := elasticsearch.Config{
+		Addresses: []string{viper.GetString(elasticURL)},
+	}
+
+	elasticClient, err := elasticsearch.NewClient(elasticCfg)
+	if err != nil {
+		panic(err)
+	}
+
+	db := db.NewClient(elasticClient, viper.GetString(elasticProgressIndex))
 	// Get Kafka Version
 	version, err := sarama.ParseKafkaVersion(viper.GetString("KAFKA_VERSION"))
 	if err != nil {
@@ -75,10 +95,10 @@ func main() {
 	}()
 
 	// set up coordinator
-	coord := coordinator.NewCoordinator(producer, viper.GetString(kafkaTopic), clockwork.NewRealClock())
+	coord := coordinator.NewCoordinator(producer, db, viper.GetString(createTopic), viper.GetString(executeTopic), clockwork.NewRealClock())
 
 	// set up consumer
-	consumer := consumer.NewConsumer(producer, coord, viper.GetInt32(partitions), viper.GetString(nodeID), viper.GetString(kafkaTopic))
+	consumer := consumer.NewConsumer(producer, coord, viper.GetInt32(partitions), viper.GetString(nodeID), viper.GetString(createTopic))
 
 	// set up consumer group
 	client, err := sarama.NewConsumerGroup(viper.GetStringSlice(kafkaBrokers), viper.GetString(kafkaGroupID), config)
@@ -93,7 +113,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for {
-			if err := client.Consume(ctx, []string{viper.GetString(kafkaTopic)}, consumer); err != nil {
+			if err := client.Consume(ctx, []string{viper.GetString(createTopic)}, consumer); err != nil {
 				// panic if the consumer stops working
 				log.Panicf("Error from consumer: %v", err)
 			}

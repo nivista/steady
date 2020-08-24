@@ -2,12 +2,12 @@ package server
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/.gen/protos/services"
-	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
+
 	"github.com/nivista/steady/webservice/db"
 	"github.com/nivista/steady/webservice/queue"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -29,9 +29,8 @@ func NewServer(db db.Client, queue queue.Client) services.SteadyServer {
 func (s *server) CreateTimer(ctx context.Context, req *services.CreateTimerRequest) (*services.CreateTimerResponse, error) {
 	// TODO validate schedule execter, etc.
 
-	fmt.Println(req.Schedule.StartTime)
 	// if starttime is unset, starttime = now
-	if req.Schedule.StartTime.AsTime().IsZero() {
+	if req.Schedule.StartTime == nil {
 		req.Schedule.StartTime = timestamppb.Now()
 	}
 
@@ -40,7 +39,7 @@ func (s *server) CreateTimer(ctx context.Context, req *services.CreateTimerReque
 		return nil, err
 	}
 
-	err = s.queue.PublishCreate(req.Domain, timerID, &messaging.CreateTimer{
+	err = s.queue.PublishCreate(req.Domain, timerID, &create.Value{
 		Task:     req.Task,
 		Schedule: req.Schedule,
 		Meta: &common.Meta{

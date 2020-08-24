@@ -38,5 +38,4 @@ message GetTimerResponse {
     Task task = 1;
     Schedule schedule = 2;
     Meta meta = 3;
-    Progress progress = 4;
 }
