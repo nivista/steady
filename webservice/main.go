@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -11,9 +10,7 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
-	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/nivista/steady/.gen/protos/services"
-	"github.com/nivista/steady/webservice/db"
 	"github.com/nivista/steady/webservice/queue"
 	"github.com/nivista/steady/webservice/server"
 	"github.com/spf13/viper"
@@ -72,17 +69,8 @@ func main() {
 
 	queueClient := queue.NewClient(producer, viper.GetInt32(partitions), viper.GetString(createTopic))
 
-	// set up database
-	ctx, cancel := context.WithCancel(context.Background())
-
-	dbConn, err := pgxpool.Connect(ctx, viper.GetString(postgresURL))
-	if err != nil {
-		panic(err)
-	}
-	db := db.NewClient(dbConn)
-
 	// set up server
-	steadyServer := server.NewServer(db, queueClient)
+	steadyServer := server.NewServer(queueClient)
 
 	conn, err := net.Listen("tcp", viper.GetString(addr))
 	if err != nil {
@@ -106,7 +94,4 @@ func main() {
 	// block for signals
 	<-sigterm
 	log.Println("terminating: via signal")
-
-	// cancel context
-	cancel()
 }

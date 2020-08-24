@@ -10,12 +10,12 @@ import (
 
 	"github.com/elastic/go-elasticsearch/esapi"
 	elasticsearch "github.com/elastic/go-elasticsearch/v8"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 )
 
 type (
 	Client interface {
-		GetTimerProgresses(ctx context.Context, pks []string) (map[string]*execute.Progress, error)
+		GetTimerProgresses(ctx context.Context, pks []string) (map[string]*messaging.Progress, error)
 	}
 
 	client struct {
@@ -33,12 +33,12 @@ func NewClient(elastic *elasticsearch.Client, progressIndex string) Client {
 
 type elasticFormat struct {
 	Hits []struct {
-		ID     *string           `json:"_id"`
-		Source *execute.Progress `json:"_source"`
+		ID     *string             `json:"_id"`
+		Source *messaging.Progress `json:"_source"`
 	} `json:"hits"`
 }
 
-func (c *client) GetTimerProgresses(ctx context.Context, pks []string) (map[string]*execute.Progress, error) {
+func (c *client) GetTimerProgresses(ctx context.Context, pks []string) (map[string]*messaging.Progress, error) {
 
 	req := esapi.SearchRequest{
 		Index: []string{c.progressIndex},
@@ -59,7 +59,7 @@ func (c *client) GetTimerProgresses(ctx context.Context, pks []string) (map[stri
 		return nil, err
 	}
 
-	out := make(map[string]*execute.Progress, len(pks)) // omit len(pks)? its an upper bound
+	out := make(map[string]*messaging.Progress, len(pks)) // omit len(pks)? its an upper bound
 
 	for _, hit := range eF.Hits {
 		out[*hit.ID] = hit.Source

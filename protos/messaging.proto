@@ -1,11 +1,17 @@
 syntax = "proto3";
-package messaging.execute;
 
 import "google/protobuf/timestamp.proto";
+import "protos/common.proto";
 
-option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging/execute";
+option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging";
 
-message Value {
+message Create {
+    Task task = 1;
+    Schedule schedule = 2;
+    Meta meta = 3;
+}
+
+message Execute {
     Progress progress = 1;
     bytes result = 2;
 }

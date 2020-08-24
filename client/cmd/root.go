@@ -38,10 +38,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cobra.yaml)")
 
 	rootCmd.PersistentFlags().StringVar(&addr, "addr", "localhost:8080", "address of steady server to connect to.")
-	rootCmd.PersistentFlags().StringVar(&addr, "domain", "default", "domain of steady user.")
 
 	viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
-	viper.BindPFlag("domain", rootCmd.PersistentFlags().Lookup("domain"))
 
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		var err error

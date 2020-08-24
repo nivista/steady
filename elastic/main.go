@@ -26,7 +26,9 @@ const (
 	elasticURL             = "ELASTIC_URL"
 	elasticExecutionsIndex = "EXECUTIONS"
 	elasticProgressIndex   = "PROGRESS"
-	executeTopic           = "EXECUTE_TOPIC"
+	elasticTimersIndex     = "TIMERS"
+	executeTopic           = "EXECUTE_KAFKA_TOPIC"
+	createTopic            = "CREATE_KAFKA_TOPIC"
 	kafkaBrokers           = "KAFKA_BROKERS"
 	kafkaVersion           = "KAFKA_VERSION"
 	kafkaGroupID           = "KAFKA_GROUP_ID"
@@ -37,6 +39,7 @@ func main() {
 	viper.SetDefault(elasticExecutionsIndex, "executions")
 	viper.SetDefault(elasticProgressIndex, "progress")
 	viper.SetDefault(executeTopic, "execute")
+	viper.SetDefault(createTopic, "create")
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
 	viper.SetDefault(kafkaVersion, "2.2.1")
 	viper.SetDefault(kafkaGroupID, "elastic")
@@ -83,7 +86,7 @@ func main() {
 	}
 
 	// set up consumer
-	consumer := consumer.NewConsumer(db)
+	consumer := consumer.NewConsumer(db, viper.GetString(createTopic), viper.GetString(executeTopic))
 
 	// consume
 	wg := &sync.WaitGroup{}
@@ -91,7 +94,7 @@ func main() {
 	go func() {
 		defer wg.Done()
 		for {
-			if err := client.Consume(ctx, []string{viper.GetString(executeTopic)}, consumer); err != nil {
+			if err := client.Consume(ctx, []string{viper.GetString(createTopic), viper.GetString(executeTopic)}, consumer); err != nil {
 				// panic if the consumer stops working
 				// maybe instead send a signal and then cancel context?
 				log.Panicf("Error from consumer: %v", err)

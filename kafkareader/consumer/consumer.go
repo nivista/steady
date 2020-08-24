@@ -4,10 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
-
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
-	"github.com/nivista/steady/internal/.gen/protos/timerpk"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 
 	"google.golang.org/protobuf/proto"
 )
@@ -69,22 +66,14 @@ func (c *Consumer) consumeCreates(claim sarama.ConsumerGroupClaim) {
 			continue
 		}
 
-		var key timerpk.Key
-		err := proto.Unmarshal(msg.Key, &key)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		fmt.Println("-- DOMAIN:", key.Domain)
-		fmt.Println("-- ID:", key.TimerUuid)
+		fmt.Println("-- ID:", string(msg.Key))
 
 		if msg.Value == nil {
 			fmt.Println("-- DELETE")
 		}
 
-		var val create.Value
-		err = proto.Unmarshal(msg.Value, &val)
+		var val messaging.Create
+		err := proto.Unmarshal(msg.Value, &val)
 		if err != nil {
 			fmt.Println(err)
 			continue
@@ -103,22 +92,14 @@ func (c *Consumer) consumeExecutes(claim sarama.ConsumerGroupClaim) {
 			continue
 		}
 
-		var key timerpk.Key
-		err := proto.Unmarshal(msg.Key, &key)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		fmt.Println("-- DOMAIN:", key.Domain)
-		fmt.Println("-- ID:", key.TimerUuid)
+		fmt.Println("-- ID:", string(msg.Key))
 
 		if msg.Value == nil {
 			fmt.Println("-- DELETE EXECUTE")
 		}
 
-		var val execute.Value
-		err = proto.Unmarshal(msg.Value, &val)
+		var val messaging.Execute
+		err := proto.Unmarshal(msg.Value, &val)
 		if err != nil {
 			fmt.Println(err)
 			continue

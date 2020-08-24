@@ -8,14 +8,11 @@ service Steady {
     rpc CreateTimer (CreateTimerRequest) returns (CreateTimerResponse) {}
 
     rpc DeleteTimer (DeleteTimerRequest) returns (DeleteTimerResponse) {}
-
-    rpc GetTimer (GetTimerRequest) returns (GetTimerResponse) {}
 }
 
 message CreateTimerRequest {
-    string domain = 1;
-    Task task = 2;
-    Schedule schedule = 3;
+    Task task = 1;
+    Schedule schedule = 2;
 }
 
 message CreateTimerResponse {
@@ -23,19 +20,7 @@ message CreateTimerResponse {
 }
 
 message DeleteTimerRequest {
-    string domain = 1;
-    string timer_uuid = 2;
+    string timer_uuid = 1;
 }
 
 message DeleteTimerResponse {}
-
-message GetTimerRequest {
-    string domain = 1;
-    string timer_uuid = 2;
-}
-
-message GetTimerResponse {
-    Task task = 1;
-    Schedule schedule = 2;
-    Meta meta = 3;
-}

@@ -1,57 +1,57 @@
 package timer
 
 import (
-	"github.com/jonboulle/clockwork"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+	"sync"
 
+	"github.com/jonboulle/clockwork"
+
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	"github.com/nivista/steady/timer/executer"
 	"github.com/nivista/steady/timer/scheduler"
-	"go.uber.org/atomic"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type (
 	// Timer represents the configuration for the execution of a recurring task.
 	Timer interface {
-		Run(executeTimer func(*execute.Value), finishTimer func(), initialProgress *execute.Progress, clock clockwork.Clock) (cancel func())
+		Start(executeTimer func(execMsg *messaging.Execute, pk string), finishTimer func(pk string), initialProgress *messaging.Progress, clock clockwork.Clock)
+		Stop()
 	}
 
 	timer struct {
+		pk        string
 		executer  executer.Executer
 		scheduler scheduler.Scheduler
+
+		active bool
+		ch     chan struct{}
+		mux    sync.Mutex
 	}
 )
 
-func getCanceller() (cancelled <-chan struct{}, cancel func()) {
-	var stopped atomic.Bool
-
-	ch := make(chan struct{})
-
-	cancel = func() {
-		if stopped.Swap(true) {
-			close(ch)
-		}
+// Run starts the timers execution.
+func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), finishTimer func(pk string), initialProgress *messaging.Progress, clock clockwork.Clock) {
+	t.mux.Lock()
+	if t.active {
+		t.mux.Unlock()
+		return
 	}
 
-	return ch, cancel
-}
-
-// Run starts the timers execution.
-func (t *timer) Run(executeTimer func(*execute.Value), finishTimer func(), initialProgress *execute.Progress, clock clockwork.Clock) (cancel func()) {
+	t.active = true
+	t.ch = make(chan struct{})
+	t.mux.Unlock()
 
 	var progress = initialProgress
 	if progress == nil {
-		progress = &execute.Progress{}
+		progress = &messaging.Progress{}
 	}
-	cancelled, cancel := getCanceller()
 
 	go func() {
 		for {
 			nextFire, done := t.scheduler.Schedule(progress, clock.Now())
 
 			if done {
-				finishTimer()
+				finishTimer(t.pk)
 				return
 			}
 
@@ -60,25 +60,34 @@ func (t *timer) Run(executeTimer func(*execute.Value), finishTimer func(), initi
 				res := t.executer.Execute()
 				progress.CompletedExecutions++
 				progress.LastExecution = timestamppb.New(currentFire)
-				executeTimer(&execute.Value{
+				executeTimer(&messaging.Execute{
 					Progress: progress,
 					Result:   res,
-				})
+				}, t.pk)
 
-			case <-cancelled:
+			case <-t.ch:
 				return
 			}
 		}
 
 	}()
 
-	return cancel
+}
+
+func (t *timer) Stop() {
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
+	if t.active {
+		close(t.ch)
+	}
 }
 
 // New creates a Timer from a *messaging.CreateTimer.
-func New(p *create.Value) (Timer, error) {
+func New(p *messaging.Create, pk string) (Timer, error) {
 	var t timer
 
+	t.pk = pk
 	t.executer = executer.New(p.Task)
 
 	var err error

@@ -13,12 +13,13 @@ import (
 	elasticsearch "github.com/elastic/go-elasticsearch"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 )
 
 type (
 	Client interface {
-		AddExecuteTimer(ctx context.Context, domain, id string, kafkaTimestamp time.Time, value *execute.Value) error
+		ExecuteTimer(ctx context.Context, id string, kafkaTimestamp time.Time, value *messaging.Execute) error
+		CreateTimer(ctx context.Context, id string, value *messaging.Create)
 	}
 
 	client struct {
@@ -35,7 +36,7 @@ func NewClient(elastic *elasticsearch.Client, executionsIndex, progressIndex str
 	}
 }
 
-func (c *client) AddExecuteTimer(ctx context.Context, domain, id string, kafkaTimestamp time.Time, value *execute.Value) error {
+func (c *client) ExecuteTimer(ctx context.Context, id string, kafkaTimestamp time.Time, value *messaging.Execute) error {
 	var result map[string]interface{}
 	err := json.Unmarshal(value.Result, &result)
 
@@ -45,7 +46,6 @@ func (c *client) AddExecuteTimer(ctx context.Context, domain, id string, kafkaTi
 
 	data := make(map[string]interface{})
 	data["TimerUUID"] = id
-	data["Domain"] = domain
 	data["KafkaTimestamp"] = kafkaTimestamp
 	data["Result"] = result
 
@@ -54,7 +54,7 @@ func (c *client) AddExecuteTimer(ctx context.Context, domain, id string, kafkaTi
 		return err
 	}
 
-	res, err := c.elastic.Create(c.execIndex, strings.Join([]string{domain, id, kafkaTimestamp.String()}, "-"), bytes.NewReader(doc))
+	res, err := c.elastic.Create(c.execIndex, strings.Join([]string{id, kafkaTimestamp.String()}, "-"), bytes.NewReader(doc))
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (c *client) AddExecuteTimer(ctx context.Context, domain, id string, kafkaTi
 		`,
 		"doc_as_upsert": true	
 	}`))
-	res2, err := c.elastic.Update(c.progIndex, strings.Join([]string{domain, id}, "-"),
+	res2, err := c.elastic.Update(c.progIndex, id,
 		strings.NewReader(fmt.Sprint(`{
 			"doc": `, string(progJSON),
 			`,

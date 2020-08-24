@@ -4,14 +4,14 @@ import (
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	rcron "github.com/robfig/cron/v3"
 )
 
 type (
 	// Scheduler schedules timers based on the current time and progress.
 	Scheduler interface {
-		Schedule(prog *execute.Progress, now time.Time) (*time.Time, bool)
+		Schedule(prog *messaging.Progress, now time.Time) (*time.Time, bool)
 	}
 
 	cron struct {
@@ -54,7 +54,7 @@ func New(p *common.Schedule) (Scheduler, error) {
 
 // Schedule returns the timers next scheduled fire, and a bool indicating if the timer should be done firing.
 // The *time.Timer will be nil if and only if the bool is true.
-func (c *cron) Schedule(prog *execute.Progress, now time.Time) (*time.Time, bool) {
+func (c *cron) Schedule(prog *messaging.Progress, now time.Time) (*time.Time, bool) {
 
 	// check executions condition
 	if c.maxExecutions != common.Executions_INFINITE && prog != nil && prog.CompletedExecutions >= int32(c.maxExecutions) {

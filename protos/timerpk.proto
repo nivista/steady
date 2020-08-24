@@ -1,8 +1,0 @@
-syntax = "proto3";
-
-option go_package = "github.com/nivista/steady/internal/.gen/protos/timerpk";
-
-message Key {
-    string domain = 1;
-    string timer_uuid = 2;
-}

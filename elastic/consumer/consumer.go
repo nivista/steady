@@ -5,20 +5,22 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/elastic/db"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/execute"
-	"github.com/nivista/steady/internal/.gen/protos/timerpk"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 
 	"google.golang.org/protobuf/proto"
 )
 
 type consumer struct {
-	db db.Client
+	db                        db.Client
+	createTopic, executeTopic string
 }
 
 // NewConsumer returns a new sarama.ConsumerGroupHandler.
-func NewConsumer(db db.Client) sarama.ConsumerGroupHandler {
+func NewConsumer(db db.Client, createTopic, executeTopic string) sarama.ConsumerGroupHandler {
 	return &consumer{
-		db: db,
+		db:           db,
+		createTopic:  createTopic,
+		executeTopic: executeTopic,
 	}
 }
 
@@ -33,11 +35,6 @@ func (c *consumer) Cleanup(session sarama.ConsumerGroupSession) error {
 // TODO handle errors
 func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		var key timerpk.Key
-		err := proto.Unmarshal(msg.Key, &key)
-		if err != nil {
-			fmt.Println("consumer claim unmarshal key:", err.Error())
-		}
 
 		if msg.Value == nil {
 			//todo done event
@@ -45,15 +42,15 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			continue
 		}
 
-		var val execute.Value
-		err = proto.Unmarshal(msg.Value, &val)
+		var val messaging.Execute
+		err := proto.Unmarshal(msg.Value, &val)
 		if err != nil {
 			fmt.Println("consumer claim unmarshal value:", err.Error())
 			session.MarkMessage(msg, "")
 			continue
 		}
 
-		err = c.db.AddExecuteTimer(session.Context(), key.Domain, key.TimerUuid, msg.Timestamp, &val)
+		err = c.db.AddExecuteTimer(session.Context(), string(msg.Key), msg.Timestamp, &val)
 		if err != nil {
 			fmt.Println("consume claim addexecute err:", err.Error())
 		}

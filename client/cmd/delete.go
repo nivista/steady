@@ -26,7 +26,6 @@ var (
 		Long:  "Deletes a timer.",
 		Run: func(cmd *cobra.Command, args []string) {
 			req := services.DeleteTimerRequest{
-				Domain:    domain,
 				TimerUuid: id,
 			}
 

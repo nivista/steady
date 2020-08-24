@@ -36,7 +36,6 @@ var (
 		Long:  "Creates a new http timer.",
 		Run: func(cmd *cobra.Command, args []string) {
 			req := services.CreateTimerRequest{
-				Domain: domain,
 				Task: &common.Task{
 					Task: &common.Task_Http{
 						Http: &common.HTTP{

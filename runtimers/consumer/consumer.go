@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Shopify/sarama"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 
 	"github.com/nivista/steady/runtimers/coordinator"
 	"google.golang.org/protobuf/proto"
@@ -106,7 +106,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			continue
 		}
 
-		var timer create.Value
+		var timer messaging.Create
 		err := proto.Unmarshal(msg.Value, &timer)
 		if err != nil {
 			fmt.Println("consume claim unmarshal timer:", err.Error())

@@ -6,22 +6,19 @@ import (
 	"github.com/google/uuid"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/.gen/protos/services"
-	"github.com/nivista/steady/internal/.gen/protos/messaging/create"
 
-	"github.com/nivista/steady/webservice/db"
+	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	"github.com/nivista/steady/webservice/queue"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type server struct {
-	db    db.Client
 	queue queue.Client
 }
 
 // NewServer returns a services.SteadyServer
-func NewServer(db db.Client, queue queue.Client) services.SteadyServer {
+func NewServer(queue queue.Client) services.SteadyServer {
 	return &server{
-		db:    db,
 		queue: queue,
 	}
 }
@@ -39,7 +36,7 @@ func (s *server) CreateTimer(ctx context.Context, req *services.CreateTimerReque
 		return nil, err
 	}
 
-	err = s.queue.PublishCreate(req.Domain, timerID, &create.Value{
+	err = s.queue.PublishCreate(timerID, &messaging.Create{
 		Task:     req.Task,
 		Schedule: req.Schedule,
 		Meta: &common.Meta{
@@ -60,14 +57,10 @@ func (s *server) DeleteTimer(ctx context.Context, req *services.DeleteTimerReque
 		return nil, err
 	}
 
-	err = s.queue.PublishDelete(req.Domain, id)
+	err = s.queue.PublishDelete(id)
 	if err != nil {
 		return nil, err
 	}
 
 	return &services.DeleteTimerResponse{}, nil
-}
-
-func (s *server) GetTimer(ctx context.Context, req *services.GetTimerRequest) (*services.GetTimerResponse, error) {
-	return s.db.GetTimer(ctx, req)
 }
