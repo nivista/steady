@@ -1,6 +1,8 @@
 package timer
 
 import (
+	"time"
+
 	"github.com/jonboulle/clockwork"
 
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
@@ -17,5 +19,11 @@ type (
 
 		// Stop should stop timer execution synchronously.
 		Stop()
+	}
+
+	// defining type here rather than using only protobuf Progress type, this can be safely copied
+	progress struct {
+		completedExecutions int32
+		lastExecution       time.Time
 	}
 )
