@@ -50,8 +50,8 @@ var (
 					MaxExecutions: common.Executions(maxExecutions),
 				},
 			}
-
-			res, err := client.CreateTimer(cmd.Context(), &req)
+			ctx := basicAuthCtx(cmd.Context(), apiToken, apiSecret)
+			res, err := client.CreateTimer(ctx, &req)
 			if err != nil {
 				fmt.Println(err)
 			} else {

@@ -34,7 +34,72 @@ func (c *consumer) Cleanup(session sarama.ConsumerGroupSession) error {
 
 // TODO handle errors
 func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	// TODO
+	// switch on topics
+	switch claim.Topic() {
+	case c.createTopic:
+		c.consumeCreateClaim(session, claim)
+	case c.executeTopic:
+		c.consumeExecuteClaim(session, claim)
+	}
+
+	return nil
+}
+func (c *consumer) consumeCreateClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
+
+		if msg.Key == nil {
+			//Dummy event, ignore
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
+		if err != nil {
+			fmt.Println("error unmarshalling keys")
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		if msg.Value == nil {
+			//todo done event
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		var val messaging.Create
+		err = proto.Unmarshal(msg.Value, &val)
+		if err != nil {
+			fmt.Println("consumeCreateClaim unmarshal value:", err.Error())
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		err = c.db.CreateTimer(session.Context(), key.Domain, key.TimerUUID, &val)
+		if err != nil {
+			fmt.Println("consumeCreateClaim addexecute err:", err.Error())
+		}
+	}
+	return nil
+}
+
+func (c *consumer) consumeExecuteClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+
+		if msg.Key == nil {
+			//Dummy event, ignore
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
+		if err != nil {
+			fmt.Println("consumeExecuteClaim unmarshalling keys")
+			session.MarkMessage(msg, "")
+			continue
+		}
 
 		if msg.Value == nil {
 			//todo done event
@@ -43,16 +108,16 @@ func (c *consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		}
 
 		var val messaging.Execute
-		err := proto.Unmarshal(msg.Value, &val)
+		err = proto.Unmarshal(msg.Value, &val)
 		if err != nil {
-			fmt.Println("consumer claim unmarshal value:", err.Error())
+			fmt.Println("consumerExecuteClaim unmarshal value:", err.Error())
 			session.MarkMessage(msg, "")
 			continue
 		}
 
-		err = c.db.AddExecuteTimer(session.Context(), string(msg.Key), msg.Timestamp, &val)
+		err = c.db.ExecuteTimer(session.Context(), key.Domain, key.TimerUUID, msg.Timestamp, &val)
 		if err != nil {
-			fmt.Println("consume claim addexecute err:", err.Error())
+			fmt.Println("consumeExecuteClaim addexecute err:", err.Error())
 		}
 	}
 	return nil

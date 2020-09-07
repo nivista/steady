@@ -38,6 +38,7 @@ func main() {
 	viper.SetDefault(elasticURL, "http://localhost:9200")
 	viper.SetDefault(elasticExecutionsIndex, "executions")
 	viper.SetDefault(elasticProgressIndex, "progress")
+	viper.SetDefault(elasticTimersIndex, "timers")
 	viper.SetDefault(executeTopic, "execute")
 	viper.SetDefault(createTopic, "create")
 	viper.SetDefault(kafkaBrokers, "localhost:9092")
@@ -67,7 +68,7 @@ func main() {
 		panic(err)
 	}
 
-	db := db.NewClient(elasticClient, viper.GetString(elasticExecutionsIndex), viper.GetString(elasticProgressIndex))
+	db := db.NewClient(elasticClient, viper.GetString(elasticExecutionsIndex), viper.GetString(elasticProgressIndex), viper.GetString(elasticTimersIndex))
 	// Get Kafka Version
 	version, err := sarama.ParseKafkaVersion(viper.GetString("KAFKA_VERSION"))
 	if err != nil {

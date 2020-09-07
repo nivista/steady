@@ -92,14 +92,16 @@ func (c *Consumer) consumeExecutes(claim sarama.ConsumerGroupClaim) {
 			continue
 		}
 
-		fmt.Println("-- ID:", string(msg.Key))
-
+		var key messaging.Key
+		err := proto.Unmarshal(msg.Key, &key)
+		fmt.Println("-- ID:", key.TimerUUID)
+		fmt.Println("-- DOMAIN:", key.Domain)
 		if msg.Value == nil {
 			fmt.Println("-- DELETE EXECUTE")
 		}
 
 		var val messaging.Execute
-		err := proto.Unmarshal(msg.Value, &val)
+		err = proto.Unmarshal(msg.Value, &val)
 		if err != nil {
 			fmt.Println(err)
 			continue

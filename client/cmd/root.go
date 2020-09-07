@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 
@@ -9,13 +11,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 var (
 	// Used for flags.
-	cfgFile string
-	addr    string
-	domain  string
+	cfgFile             string
+	addr                string
+	apiToken, apiSecret string
 
 	conn   *grpc.ClientConn
 	client services.SteadyClient
@@ -36,24 +39,14 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cobra.yaml)")
-
-	rootCmd.PersistentFlags().StringVar(&addr, "addr", "localhost:8080", "address of steady server to connect to.")
-
+	rootCmd.PersistentFlags().StringVar(&addr, "addr", "127.0.0.1:8080", "address of steady server to connect to.")
+	rootCmd.PersistentFlags().StringVar(&apiToken, "apitoken", "", "api key to authenticate requests.")
+	rootCmd.PersistentFlags().StringVar(&apiSecret, "apisecret", "", "api key to authenticate requests.")
 	viper.BindPFlag("addr", rootCmd.PersistentFlags().Lookup("addr"))
 
-	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		var err error
-		conn, err = grpc.Dial("localhost:8080", grpc.WithInsecure())
-		if err != nil {
-			return err
-		}
-		client = services.NewSteadyClient(conn)
-		return nil
-	}
-	var err error
-	conn, err = grpc.Dial("localhost:8080", grpc.WithInsecure())
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		//return err
+		panic(err)
 	}
 	client = services.NewSteadyClient(conn)
 	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
@@ -87,4 +80,18 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func basicAuthCtx(ctx context.Context, username, password string) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, "Authorization", "Basic "+basicAuth(username, password))
+}
+
+// See 2 (end of page 4) https://www.ietf.org/rfc/rfc2617.txt
+// "To receive authorization, the client sends the userid and password,
+// separated by a single colon (":") character, within a base64
+// encoded string in the credentials."
+// It is not meant to be urlencoded.
+func basicAuth(username, password string) string {
+	auth := username + ":" + password
+	return base64.StdEncoding.EncodeToString([]byte(auth))
 }

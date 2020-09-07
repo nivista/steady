@@ -11,8 +11,8 @@ import (
 type (
 	// Client represents a synchrounous client to the queue.
 	Client interface {
-		PublishCreate(timerID uuid.UUID, timer *messaging.Create) error
-		PublishDelete(timerID uuid.UUID) error
+		PublishCreate(domain string, timerID uuid.UUID, timer *messaging.Create) error
+		PublishDelete(domain string, timerID uuid.UUID) error
 	}
 
 	client struct {
@@ -31,15 +31,24 @@ func NewClient(producer sarama.SyncProducer, partitions int32, topic string) Cli
 	}
 }
 
-func (c *client) PublishCreate(timerID uuid.UUID, timer *messaging.Create) error {
+func (c *client) PublishCreate(domain string, timerID uuid.UUID, timer *messaging.Create) error {
 	bytes, err := proto.Marshal(timer)
+	if err != nil {
+		return err
+	}
+
+	key := messaging.Key{
+		Domain:    domain,
+		TimerUUID: timerID.String(),
+	}
+	keyBytes, err := proto.Marshal(&key)
 	if err != nil {
 		return err
 	}
 
 	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       sarama.StringEncoder(timerID.String()),
+		Key:       sarama.ByteEncoder(keyBytes),
 		Value:     sarama.ByteEncoder(bytes),
 		Partition: c.bytesToPartition(timerID),
 	})
@@ -47,10 +56,19 @@ func (c *client) PublishCreate(timerID uuid.UUID, timer *messaging.Create) error
 	return err
 }
 
-func (c *client) PublishDelete(timerID uuid.UUID) error {
-	_, _, err := c.producer.SendMessage(&sarama.ProducerMessage{
+func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
+	key := messaging.Key{
+		Domain:    domain,
+		TimerUUID: timerID.String(),
+	}
+	keyBytes, err := proto.Marshal(&key)
+	if err != nil {
+		return err
+	}
+
+	_, _, err = c.producer.SendMessage(&sarama.ProducerMessage{
 		Topic:     c.topic,
-		Key:       sarama.StringEncoder(timerID.String()),
+		Key:       sarama.ByteEncoder(keyBytes),
 		Value:     nil,
 		Partition: c.bytesToPartition(timerID),
 	})

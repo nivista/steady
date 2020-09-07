@@ -6,6 +6,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"github.com/nivista/steady/timer"
 
 	"github.com/nivista/steady/runtimers/coordinator"
 	"google.golang.org/protobuf/proto"
@@ -71,9 +72,7 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 
-	var (
-		man = c.coord.GetManager(claim.Partition())
-	)
+	var man = c.coord.GetManager(claim.Partition())
 
 	// this happens concurrently with the firing of timers and affects messages produced.
 	// we want the gaurantee that we will send producer messages w/ monotonically increasing generationIDs.
@@ -99,21 +98,26 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			continue
 		}
 
-		keyStr := string(msg.Key)
+		pk := string(msg.Key)
 
 		if msg.Value == nil {
-			man.RemoveTimer(keyStr)
+			man.RemoveTimer(pk)
 			continue
 		}
 
-		var timer messaging.Create
-		err := proto.Unmarshal(msg.Value, &timer)
+		var create messaging.Create
+		err := proto.Unmarshal(msg.Value, &create)
 		if err != nil {
 			fmt.Println("consume claim unmarshal timer:", err.Error())
 			continue
 		}
 
-		err = man.AddTimer(keyStr, &timer)
+		t, err := timer.New(&create, pk)
+		if err != nil {
+			fmt.Println("consume claim timer.New error:", err.Error())
+		}
+
+		err = man.AddTimer(pk, t)
 		if err != nil {
 			fmt.Println("consume claim add timer:", err.Error())
 			continue

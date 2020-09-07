@@ -20,14 +20,15 @@ type Manager struct {
 	partition                 int32
 	db                        db.Client
 
-	GenerationID string
 	Active       bool
+	GenerationID string
 
 	timers   map[string]timer.Timer
 	producer chan<- *sarama.ProducerMessage
 	clock    clockwork.Clock
 }
 
+// unexported because the lifecycle of managers is managed by coordinator.
 func newManager(producer chan<- *sarama.ProducerMessage, db db.Client, createTopic, executeTopic string, partition int32, clock clockwork.Clock) *Manager {
 	return &Manager{
 		timers:       make(map[string]timer.Timer),
@@ -40,34 +41,30 @@ func newManager(producer chan<- *sarama.ProducerMessage, db db.Client, createTop
 	}
 }
 
-func (m *Manager) AddTimer(pk string, t *messaging.Create) error {
-
-	myTimer, err := timer.New(t, pk)
-	if err != nil {
-		return err
-	}
-
-	m.timers[pk] = myTimer
+// AddTimer adds a timer to the manager, and starts it if the manager is active.
+func (m *Manager) AddTimer(pk string, t timer.Timer) error {
+	m.timers[pk] = t
 
 	if m.Active {
-		m.startTimerData(pk, &messaging.Progress{})
+		m.startTimer(pk)
 	}
 
 	return nil
 }
 
+// RemoveTimer stops a timer if it is running and removes it from the manager.
 func (m *Manager) RemoveTimer(pk string) {
 	timer, ok := m.timers[pk]
 	if !ok {
 		return
 	}
 
-	timer.Stop()
+	go timer.Stop()
 
 	delete(m.timers, pk)
 }
 
-// TODO go to elastic for data
+// Start starts all the managers timers, and causes new timers that are created to also be started.
 func (m *Manager) Start(ctx context.Context) error {
 	if m.Active == true {
 		return nil
@@ -80,6 +77,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		timerPks[i] = pk
 		i++
 	}
+
 	progs, err := m.db.GetTimerProgresses(ctx, timerPks)
 	if err != nil {
 		return err
@@ -87,22 +85,22 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	for pk := range m.timers {
 		prog, ok := progs[pk]
-		if !ok {
-			prog = &messaging.Progress{}
+		if ok {
+			m.timers[pk] = m.timers[pk].WithProgress(prog)
 		}
-		m.startTimerData(pk, prog)
+		m.startTimer(pk)
 	}
 	return nil
 }
 
 func (m *Manager) stop() {
 	for _, timer := range m.timers {
-		timer.Stop()
+		go timer.Stop()
 	}
 }
 
-func (m *Manager) startTimerData(pk string, prog *messaging.Progress) {
-	m.timers[pk].Start(m.executeTimerFunc, m.finishTimerFunc, prog, m.clock)
+func (m *Manager) startTimer(pk string) {
+	m.timers[pk].Start(m.executeTimerFunc, m.finishTimerFunc, m.clock)
 }
 
 func (m *Manager) executeTimerFunc(execMsg *messaging.Execute, pk string) {
@@ -118,10 +116,6 @@ func (m *Manager) executeTimerFunc(execMsg *messaging.Execute, pk string) {
 		Key:       sarama.StringEncoder(pk),
 		Value:     sarama.ByteEncoder(bytes),
 		Partition: m.partition,
-		Headers: []sarama.RecordHeader{{
-			Key:   []byte("generationID"),
-			Value: []byte(m.GenerationID),
-		}},
 	}
 
 }
@@ -132,10 +126,6 @@ func (m *Manager) finishTimerFunc(pk string) {
 		Key:       sarama.StringEncoder(pk),
 		Value:     nil,
 		Partition: m.partition,
-		Headers: []sarama.RecordHeader{{
-			Key:   []byte("generationID"),
-			Value: []byte(m.GenerationID),
-		}},
 	}
 
 	m.producer <- &sarama.ProducerMessage{

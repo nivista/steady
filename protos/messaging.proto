@@ -5,6 +5,11 @@ import "protos/common.proto";
 
 option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging";
 
+message Key {
+    string domain = 1;
+    string timerUUID = 2;
+}
+
 message Create {
     Task task = 1;
     Schedule schedule = 2;
