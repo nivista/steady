@@ -15,7 +15,10 @@ import (
 )
 
 // upper limit for the size of a reponse body, past this point it will be dropped
-const maxResponseBodySize = 1e6
+const (
+	maxRequestBodySize  = 1e6
+	maxResponseBodySize = 1e6
+)
 
 // httpResponse for JSON marshalling
 type httpResponse struct {
@@ -38,6 +41,10 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 
 	if u.Host == "" {
 		return nil, errors.New("relative url not allowed")
+	}
+
+	if len(pb.Body) > maxRequestBodySize {
+		return nil, errors.New("request body too long")
 	}
 
 	var body io.ReadCloser
