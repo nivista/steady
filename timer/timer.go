@@ -34,7 +34,7 @@ type (
 
 		active bool
 		ch     chan struct{}
-		mux    sync.RWMutex
+		mux    sync.Mutex
 	}
 
 	// making my own type here rather than using protobuf, this can be safely copied.
