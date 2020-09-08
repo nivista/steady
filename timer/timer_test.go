@@ -22,7 +22,8 @@ var testCases = []struct {
 	{
 		timer: &timer{
 			execute: func() []byte { return nil },
-			schedule: newSchedule(&common.Schedule{ // ideal schedule: fires once, 1 second past epoch.
+			schedule: newSchedulePanicOnErr(&common.Schedule{
+				// intended execution: fires once 1 second past epoch.
 				Cron:          "@every 1s",
 				StartTime:     timestamppb.New(time.Unix(1, 0)),
 				MaxExecutions: 1,
@@ -45,7 +46,8 @@ var testCases = []struct {
 	{
 		timer: &timer{
 			execute: func() []byte { return nil },
-			schedule: newSchedule(&common.Schedule{ // intended schedule: fires 60 and 120 seconds past epoch.
+			schedule: newSchedulePanicOnErr(&common.Schedule{
+				// intended execution: fires 60 and 120 seconds past epoch.
 				Cron:          "@every 1m",
 				StartTime:     timestamppb.New(time.Unix(60, 0)),
 				MaxExecutions: 2,
@@ -72,7 +74,8 @@ var testCases = []struct {
 	{
 		timer: &timer{
 			execute: func() []byte { return nil },
-			schedule: newSchedule(&common.Schedule{ // intended schedule: fires 60 and 120 seconds past epoch.
+			schedule: newSchedulePanicOnErr(&common.Schedule{
+				// intended execution: fires 60 and 120 seconds past epoch.
 				Cron:          "@every 1m",
 				StartTime:     timestamppb.New(time.Unix(60, 0)),
 				MaxExecutions: 2,
@@ -160,4 +163,12 @@ Outer:
 			}
 		}
 	}
+}
+
+func newSchedulePanicOnErr(pb *common.Schedule) schedule {
+	sched, err := newSchedule(pb)
+	if err != nil {
+		panic(err)
+	}
+	return sched
 }

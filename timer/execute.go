@@ -8,23 +8,12 @@ import (
 
 type execute func() []byte
 
-// newExecute assumes a task has already been validated
-func newExecute(t *common.Task) execute {
+func newExecute(t *common.Task) (execute, error) {
 	switch task := t.Task.(type) {
 	case *common.Task_Http:
 		return newHTTP(task.Http)
 	default:
-		panic("unknown task")
-	}
-}
-
-func validateTask(t *common.Task) error {
-	switch task := t.Task.(type) {
-	case *common.Task_Http:
-		_, err := httpIsValid(task.Http)
-		return err
-	default:
-		return errors.New("unknown task")
+		return nil, errors.New("unknown task")
 	}
 }
 

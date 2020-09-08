@@ -13,11 +13,10 @@ type schedule func(prog progress, now time.Time) *time.Time
 
 var parser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
 
-func newSchedule(p *common.Schedule) schedule {
-	var err error
-	var sched cron.Schedule
-	if sched, err = validateSchedule(p); err != nil {
-		panic("scheduler.New called with invalid Schedule: " + err.Error())
+func newSchedule(p *common.Schedule) (schedule, error) {
+	var sched, err = parser.Parse(p.Cron)
+	if err != nil {
+		return nil, errors.New("invalid cron: " + err.Error())
 	}
 
 	return func(prog progress, now time.Time) *time.Time {
@@ -49,13 +48,5 @@ func newSchedule(p *common.Schedule) schedule {
 		}
 
 		return &nextFire
-	}
-}
-
-func validateSchedule(p *common.Schedule) (cron.Schedule, error) {
-	sched, err := parser.Parse(p.Cron)
-	if err != nil {
-		return nil, errors.New("invalid cron config: " + err.Error())
-	}
-	return sched, nil
+	}, nil
 }
