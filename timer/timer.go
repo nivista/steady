@@ -37,7 +37,7 @@ type (
 		mux    sync.RWMutex
 	}
 
-	// zrather than using protobuf, this can be safely copied.
+	// making my own type here rather than using protobuf, this can be safely copied.
 	progress struct {
 		completedExecutions int32
 		lastExecution       time.Time
@@ -45,28 +45,27 @@ type (
 )
 
 // IsValid validates a create timer message.
-func IsValid(p *messaging.Create) error {
-	if _, err := validateSchedule(p.Schedule); err != nil {
-		return errors.New("invalid schedule: " + err.Error())
-	}
-
-	if err := validateTask(p.Task); err != nil {
-		return errors.New("invalid task: " + err.Error())
-	}
-
-	return nil
+func IsValid(pb *messaging.Create) error {
+	_, err := New(pb, "")
+	return err
 }
 
 // New creates a Timer from a create timer message and a primary key.
-func New(p *messaging.Create, pk string) (Timer, error) {
-	if err := IsValid(p); err != nil {
-		return nil, errors.New("new timer: " + err.Error())
+func New(pb *messaging.Create, pk string) (Timer, error) {
+	exec, err := newExecute(pb.Task)
+	if err != nil {
+		return nil, errors.New("invalid task: " + err.Error())
+	}
+
+	sched, err := newSchedule(pb.Schedule)
+	if err != nil {
+		return nil, errors.New("invalid schedule: " + err.Error())
 	}
 
 	return &timer{
 		pk:       pk,
-		execute:  newExecute(p.Task),
-		schedule: newSchedule(p.Schedule),
+		execute:  exec,
+		schedule: sched,
 		ch:       make(chan struct{}),
 	}, nil
 }
@@ -93,7 +92,7 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 	go func() {
 
 		for {
-			var currFire = t.schedule(t.progress, clock.Now())
+			currFire := t.schedule(t.progress, clock.Now())
 
 			if currFire == nil {
 				finishTimer(t.pk)

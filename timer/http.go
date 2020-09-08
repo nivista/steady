@@ -24,10 +24,37 @@ type httpResponse struct {
 	Headers            map[string][]string
 }
 
-func newHTTP(pb *common.HTTP) execute {
-	req, err := httpIsValid(pb)
+func newHTTP(pb *common.HTTP) (execute, error) {
+	var method string
+	var ok bool
+	if method, ok = common.Method_name[int32(pb.Method)]; !ok {
+		return nil, errors.New("unknown method")
+	}
+
+	u, err := url.Parse(pb.Url)
 	if err != nil {
-		panic("newHTTP called with invalid common.HTTP: " + err.Error())
+		return nil, errors.New("parsing url: " + err.Error())
+	}
+
+	if u.Host == "" {
+		return nil, errors.New("relative url not allowed")
+	}
+
+	var body io.ReadCloser
+	if pb.Body != nil {
+		body = ioutil.NopCloser(bytes.NewReader(pb.Body))
+	}
+
+	req, err := http.NewRequest(method, pb.Url, body)
+	if err != nil {
+		return nil, errors.New("http.NewRequest: " + err.Error())
+	}
+
+	req.ContentLength = int64(len(pb.Body))
+
+	// merge headers
+	for key, value := range pb.Headers {
+		req.Header[key] = strings.Split(value, ",")
 	}
 
 	return func() []byte {
@@ -65,41 +92,5 @@ func newHTTP(pb *common.HTTP) execute {
 		}
 
 		return json
-	}
-}
-
-func httpIsValid(pb *common.HTTP) (*http.Request, error) {
-	var method string
-	var ok bool
-	if method, ok = common.Method_name[int32(pb.Method)]; !ok {
-		return nil, errors.New("unknown method")
-	}
-
-	u, err := url.Parse(pb.Url)
-	if err != nil {
-		return nil, errors.New("parsing url: " + err.Error())
-	}
-
-	if u.Host == "" {
-		return nil, errors.New("relative url not allowed")
-	}
-
-	var body io.ReadCloser
-	if pb.Body != nil {
-		body = ioutil.NopCloser(bytes.NewReader(pb.Body))
-	}
-
-	req, err := http.NewRequest(method, pb.Url, body)
-	if err != nil {
-		return nil, errors.New("http.NewRequest: " + err.Error())
-	}
-
-	req.ContentLength = int64(len(pb.Body))
-
-	// merge headers
-	for key, value := range pb.Headers {
-		req.Header[key] = strings.Split(value, ",")
-	}
-
-	return req, nil
+	}, nil
 }
