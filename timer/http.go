@@ -12,13 +12,25 @@ import (
 	"strings"
 
 	"github.com/nivista/steady/.gen/protos/common"
+	"github.com/spf13/viper"
 )
 
 // upper limit for the size of a reponse body, past this point it will be dropped
-const (
-	maxRequestBodySize  = 1e6
-	maxResponseBodySize = 1e6
+var (
+	maxRequestBodySizeKey  string = "STEADY_HTTP_MAX_REQUEST_BODY_SIZE"
+	maxResponseBodySizeKey string = "STEADY_HTTP_MAX_RESPONSE_BODY_SIZE"
+
+	maxRequestBodySize  int64
+	maxResponseBodySize int64
 )
+
+func init() {
+	viper.SetDefault(maxRequestBodySizeKey, 1e6)
+	viper.SetDefault(maxResponseBodySizeKey, 1e6)
+
+	maxRequestBodySize = viper.GetInt64(maxRequestBodySizeKey)
+	maxResponseBodySize = viper.GetInt64(maxResponseBodySizeKey)
+}
 
 // httpResponse for JSON marshalling
 type httpResponse struct {
@@ -43,7 +55,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 		return nil, errors.New("relative url not allowed")
 	}
 
-	if len(pb.Body) > maxRequestBodySize {
+	if int64(len(pb.Body)) > maxRequestBodySize {
 		return nil, errors.New("request body too long")
 	}
 
