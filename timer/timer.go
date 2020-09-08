@@ -2,11 +2,11 @@ package timer
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/jonboulle/clockwork"
+	"go.uber.org/atomic"
 
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -32,9 +32,8 @@ type (
 		schedule
 		progress
 
-		active bool
-		ch     chan struct{}
-		mux    sync.Mutex
+		ready, active *atomic.Bool
+		stop          chan struct{}
 	}
 
 	// making my own type here rather than using protobuf, this can be safely copied.
@@ -48,6 +47,7 @@ type (
 func IsValid(pb *messaging.Create) error {
 	_, err := New(pb, "")
 	return err
+
 }
 
 // New creates a Timer from a create timer message and a primary key.
@@ -66,7 +66,9 @@ func New(pb *messaging.Create, pk string) (Timer, error) {
 		pk:       pk,
 		execute:  exec,
 		schedule: sched,
-		ch:       make(chan struct{}),
+		ready:    atomic.NewBool(true),
+		active:   atomic.NewBool(false),
+		stop:     make(chan struct{}),
 	}, nil
 }
 
@@ -76,18 +78,17 @@ func (t *timer) WithProgress(pb *messaging.Progress) Timer {
 		execute:  t.execute,
 		schedule: t.schedule,
 		progress: progressFromProto(pb),
-		ch:       make(chan struct{}),
+		ready:    atomic.NewBool(true),
+		active:   atomic.NewBool(false),
+		stop:     make(chan struct{}),
 	}
 }
 
 func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), finishTimer func(pk string), clock clockwork.Clock) {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	if t.active {
+	if !t.ready.CAS(true, false) { // make it so Start can't be called
 		return
 	}
-	t.active = true
+	t.active.CAS(false, true) // make it so Stop can be called
 
 	go func() {
 
@@ -111,7 +112,7 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 					Result:   res,
 				}, t.pk)
 
-			case <-t.ch:
+			case <-t.stop:
 				return
 			}
 		}
@@ -120,13 +121,13 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 }
 
 func (t *timer) Stop() {
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	if t.active {
-		t.ch <- struct{}{} // block until timer stops
-		t.active = false
+	if !t.active.CAS(true, false) { // make it so Stop can't be called (start already can't be called)
+		return
 	}
+
+	t.stop <- struct{}{} // block until timer stops
+
+	t.ready.CAS(false, true) // make it so Start can be called
 }
 
 func progressToProto(p progress) *messaging.Progress {
