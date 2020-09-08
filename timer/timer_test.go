@@ -9,27 +9,26 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/.gen/protos/common"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
+	"go.uber.org/atomic"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var testCases = []struct {
-	timer           *timer
+	timer           Timer
 	startTime       time.Time // time when timer.Start should be called.
 	expectedResults map[time.Time]*messaging.Execute
 	expectFinish    bool // whether the timer is expected to self terminate after executions.
 }{
 	// Single fire with self termination.
 	{
-		timer: &timer{
-			execute: func() []byte { return nil },
-			schedule: newSchedulePanicOnErr(&common.Schedule{
+		timer: newTimerOptimistic(
+			&common.Schedule{
 				// intended execution: fires once 1 second past epoch.
 				Cron:          "@every 1s",
 				StartTime:     timestamppb.New(time.Unix(1, 0)),
 				MaxExecutions: 1,
-			}),
-			ch: make(chan struct{}),
-		},
+			},
+			progress{}), // no progress
 		startTime: time.Unix(0, 0), // recieves timer early
 		expectedResults: map[time.Time]*messaging.Execute{
 			time.Unix(1, 0): {
@@ -44,20 +43,18 @@ var testCases = []struct {
 
 	// Compensatory fire and self termination.
 	{
-		timer: &timer{
-			execute: func() []byte { return nil },
-			schedule: newSchedulePanicOnErr(&common.Schedule{
+		timer: newTimerOptimistic(
+			&common.Schedule{
 				// intended execution: fires 60 and 120 seconds past epoch.
 				Cron:          "@every 1m",
 				StartTime:     timestamppb.New(time.Unix(60, 0)),
 				MaxExecutions: 2,
-			}),
-			progress: progress{ // correctly did its first fire
+			},
+			progress{
+				// correctly did its first fire
 				lastExecution:       time.Unix(60, 0),
 				completedExecutions: 1,
-			},
-			ch: make(chan struct{}),
-		},
+			}),
 		startTime: time.Unix(150, 0), // node doesn't get the timer until 150 seconds past epoch
 		expectedResults: map[time.Time]*messaging.Execute{
 			time.Unix(150, 0): { // compensatory fire
@@ -72,20 +69,18 @@ var testCases = []struct {
 
 	// Zero fires, external termination.
 	{
-		timer: &timer{
-			execute: func() []byte { return nil },
-			schedule: newSchedulePanicOnErr(&common.Schedule{
+		timer: newTimerOptimistic(
+			&common.Schedule{
 				// intended execution: fires 60 and 120 seconds past epoch.
 				Cron:          "@every 1m",
 				StartTime:     timestamppb.New(time.Unix(60, 0)),
 				MaxExecutions: 2,
-			}),
-			progress: progress{ // correctly did its first fire
+			},
+			progress{
+				// correctly did its first fire
 				lastExecution:       time.Unix(60, 0),
 				completedExecutions: 1,
-			},
-			ch: make(chan struct{}),
-		},
+			}),
 		startTime:       time.Unix(40, 0),                   // node gets the timer before its last fire, shoudn't matter.
 		expectedResults: map[time.Time]*messaging.Execute{}, // isn't expected to fire
 		expectFinish:    false,
@@ -162,6 +157,23 @@ Outer:
 				t.Errorf("case: %v. Stop is blocking for too long.", idx)
 			}
 		}
+	}
+}
+
+func newTimerOptimistic(sched *common.Schedule, prog progress) Timer {
+	s, err := newSchedule(sched)
+	if err != nil {
+		panic(err)
+	}
+
+	return &timer{
+		execute:  func() []byte { return nil },
+		schedule: s,
+		progress: prog,
+
+		ready:  atomic.NewBool(true),
+		active: atomic.NewBool(false),
+		stop:   make(chan struct{}),
 	}
 }
 
