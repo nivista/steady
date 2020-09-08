@@ -93,15 +93,15 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 	go func() {
 
 		for {
-			var nextFire = t.schedule(t.progress, clock.Now())
+			var currFire = t.schedule(t.progress, clock.Now())
 
-			if nextFire == nil {
+			if currFire == nil {
 				finishTimer(t.pk)
 				return
 			}
 
 			select {
-			case now := <-clock.After(nextFire.Sub(clock.Now())):
+			case now := <-clock.After(currFire.Sub(clock.Now())):
 				res := t.execute()
 
 				t.progress.completedExecutions++
