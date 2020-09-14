@@ -106,7 +106,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 
 		json, err := json.Marshal(result)
 		if err != nil { // this should never happen
-			fmt.Println("error unmarshalling result: " + err.Error())
+			fmt.Println("error marshalling result: " + err.Error())
 			return getErrorJSON("steady system error.")
 		}
 
