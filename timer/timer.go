@@ -39,7 +39,7 @@ type (
 	// making my own type here rather than using protobuf, this can be safely copied.
 	progress struct {
 		completedExecutions int32
-		lastExecution       time.Time
+		lastExecution       *time.Time
 	}
 )
 
@@ -105,7 +105,7 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 				res := t.execute()
 
 				t.progress.completedExecutions++
-				t.progress.lastExecution = now
+				t.progress.lastExecution = &now
 
 				executeTimer(&messaging.Execute{
 					Progress: progressToProto(t.progress),
@@ -132,8 +132,8 @@ func (t *timer) Stop() {
 
 func progressToProto(p progress) *messaging.Progress {
 	var last *timestamp.Timestamp
-	if !p.lastExecution.IsZero() {
-		last = timestamppb.New(p.lastExecution)
+	if p.lastExecution != nil {
+		last = timestamppb.New(*p.lastExecution)
 	}
 	return &messaging.Progress{
 		CompletedExecutions: p.completedExecutions,
@@ -148,6 +148,6 @@ func progressFromProto(pb *messaging.Progress) progress {
 	}
 	return progress{
 		completedExecutions: pb.CompletedExecutions,
-		lastExecution:       last,
+		lastExecution:       &last,
 	}
 }
