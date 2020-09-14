@@ -52,7 +52,7 @@ var testCases = []struct {
 			},
 			progress{
 				// correctly did its first fire
-				lastExecution:       time.Unix(60, 0),
+				lastExecution:       unixTimePointer(60),
 				completedExecutions: 1,
 			}),
 		startTime: time.Unix(150, 0), // node doesn't get the timer until 150 seconds past epoch
@@ -78,7 +78,7 @@ var testCases = []struct {
 			},
 			progress{
 				// correctly did its first fire
-				lastExecution:       time.Unix(60, 0),
+				lastExecution:       unixTimePointer(60),
 				completedExecutions: 1,
 			}),
 		startTime:       time.Unix(40, 0),                   // node gets the timer before its last fire, shoudn't matter.
@@ -177,10 +177,7 @@ func newTimerOptimistic(sched *common.Schedule, prog progress) Timer {
 	}
 }
 
-func newSchedulePanicOnErr(pb *common.Schedule) schedule {
-	sched, err := newSchedule(pb)
-	if err != nil {
-		panic(err)
-	}
-	return sched
+func unixTimePointer(seconds int64) *time.Time {
+	t := time.Unix(seconds, 0)
+	return &t
 }
