@@ -1,7 +1,7 @@
 package timer
 
 import (
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/nivista/steady/.gen/protos/common"
@@ -18,7 +18,7 @@ const rollback = -1 * time.Nanosecond
 func newSchedule(p *common.Schedule) (schedule, error) {
 	var sched, err = parser.Parse(p.Cron)
 	if err != nil {
-		return nil, errors.New("invalid cron: " + err.Error())
+		return nil, fmt.Errorf("invalid cron: %w", err)
 	}
 
 	return func(prog progress, now time.Time) *time.Time {
@@ -28,7 +28,7 @@ func newSchedule(p *common.Schedule) (schedule, error) {
 		}
 
 		var beforeNextFire time.Time
-		if prog.lastExecution != nil { // this is the first execution
+		if prog.lastExecution == nil { // this is the first execution
 			if p.StartTime == nil { // start time wasn't specified, start now
 				p.StartTime = timestamppb.New(now)
 			}

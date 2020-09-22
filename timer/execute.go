@@ -2,6 +2,7 @@ package timer
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/nivista/steady/.gen/protos/common"
 )
@@ -18,5 +19,5 @@ func newExecute(t *common.Task) (execute, error) {
 }
 
 func getErrorJSON(err string) []byte {
-	return []byte(`{"Error":"` + err + `"}`)
+	return []byte(fmt.Sprintf("{\"Error\":\"%v\"}", err))
 }

@@ -48,7 +48,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 
 	u, err := url.Parse(pb.Url)
 	if err != nil {
-		return nil, errors.New("parsing url: " + err.Error())
+		return nil, fmt.Errorf("parsing url: %w", err)
 	}
 
 	if u.Host == "" {
@@ -56,7 +56,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 	}
 
 	if int64(len(pb.Body)) > maxRequestBodySize {
-		return nil, errors.New("request body too long")
+		return nil, errors.New("request body too large")
 	}
 
 	var body io.ReadCloser
@@ -66,7 +66,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 
 	req, err := http.NewRequest(method, pb.Url, body)
 	if err != nil {
-		return nil, errors.New("http.NewRequest: " + err.Error())
+		return nil, errors.New(err.Error())
 	}
 
 	req.ContentLength = int64(len(pb.Body))
@@ -76,6 +76,10 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 		req.Header[key] = strings.Split(value, ",")
 	}
 
+	return getHTTPExecute(req, pb.SaveResponseBody), nil
+}
+
+func getHTTPExecute(req *http.Request, saveResponseBody bool) execute {
 	return func() []byte {
 
 		res, err := http.DefaultClient.Do(req)
@@ -88,7 +92,7 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 		result.StatusCode = res.StatusCode
 		result.Headers = res.Header
 
-		if pb.SaveResponseBody {
+		if saveResponseBody {
 			limitedReader := io.LimitedReader{R: res.Body, N: maxResponseBodySize}
 
 			body, err := ioutil.ReadAll(&limitedReader)
@@ -106,10 +110,10 @@ func newHTTP(pb *common.HTTP) (execute, error) {
 
 		json, err := json.Marshal(result)
 		if err != nil { // this should never happen
-			fmt.Println("error marshalling result: " + err.Error())
+			fmt.Printf("marshalling result: %v\n", err.Error())
 			return getErrorJSON("steady system error.")
 		}
 
 		return json
-	}, nil
+	}
 }
