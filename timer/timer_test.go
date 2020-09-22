@@ -171,7 +171,6 @@ func newTimerOptimistic(sched *common.Schedule, prog progress) *timer {
 		execute:  func() []byte { return nil },
 		schedule: s,
 		progress: prog,
-		ready:    atomic.NewBool(true),
 		active:   atomic.NewBool(false),
 		stop:     make(chan struct{}),
 	}

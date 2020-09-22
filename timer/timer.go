@@ -32,8 +32,9 @@ type (
 
 		clock clockwork.Clock
 
-		ready, active *atomic.Bool
-		stop          chan struct{}
+		active     *atomic.Bool
+		terminated bool
+		stop       chan struct{}
 	}
 
 	// making my own type here rather than using protobuf, this can be safely copied.
@@ -73,17 +74,19 @@ func NewWithProgress(create *messaging.Create, prog *messaging.Progress, recordE
 		clock:             clock,
 		recordExecution:   recordExecution,
 		recordTermination: recordTermination,
-		ready:             atomic.NewBool(true),
 		active:            atomic.NewBool(false),
 		stop:              make(chan struct{}),
 	}, nil
 }
 
 func (t *timer) Start() {
-	if !t.ready.CAS(true, false) { // make it so Start can't be called
+	if t.terminated {
 		return
 	}
-	t.active.CAS(false, true) // make it so Stop can be called
+
+	if !t.active.CAS(false, true) {
+		return
+	}
 
 	go func() {
 
@@ -95,8 +98,10 @@ func (t *timer) Start() {
 				return
 			}
 
+			deadline := currFire.Sub(t.clock.Now())
+
 			select {
-			case now := <-t.clock.After(currFire.Sub(t.clock.Now())):
+			case now := <-t.clock.After(deadline):
 				res := t.execute()
 
 				t.progress.completedExecutions++
@@ -116,13 +121,12 @@ func (t *timer) Start() {
 }
 
 func (t *timer) Stop() {
-	if !t.active.CAS(true, false) { // make it so Stop can't be called (start already can't be called)
+	t.terminated = true
+	if !t.active.CAS(true, false) {
 		return
 	}
 
 	t.stop <- struct{}{} // block until timer stops
-
-	t.ready.CAS(false, true) // make it so Start can be called
 }
 
 func progressToProto(p progress) *messaging.Progress {
