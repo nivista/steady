@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "protos/common.proto";
+
+option go_package = "github.com/nivista/steady/internal/.gen/protos/messaging";
+
+message Key {
+    string domain = 1;
+    string timerUUID = 2;
+}
+
+message Create {
+    Task task = 1;
+    Schedule schedule = 2;
+    Meta meta = 3;
+}
+
+message Execute {
+    Progress progress = 1;
+    bytes result = 2;
+}
+
+message Progress {
+    int32 completedExecutions = 1;
+    google.protobuf.Timestamp lastExecution = 2;
+}
