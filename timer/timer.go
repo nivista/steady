@@ -15,22 +15,22 @@ import (
 type (
 	// Timer is a recurring task that will invoke handlers when recurring tasks execute or are finished.
 	Timer interface {
-		// WithProgress should return a new timer with the given Progress.
-		WithProgress(pb *messaging.Progress) Timer
+		// Start starts the timers execution idempotently.
+		Start()
 
-		// Start starts the timers execution. It should be a no-op if the timer is active.
-		Start(executeTimer func(execMsg *messaging.Execute, pk string), finishTimer func(pk string), clock clockwork.Clock)
-
-		// Stop should stop timer execution synchronously.
+		// Stop stops timer execution synchronously and permanently.
 		Stop()
 	}
 
 	timer struct {
-		pk string
-
 		execute
 		schedule
 		progress
+
+		recordExecution   func(*messaging.Execute)
+		recordTermination func()
+
+		clock clockwork.Clock
 
 		ready, active *atomic.Bool
 		stop          chan struct{}
@@ -45,46 +45,41 @@ type (
 
 // IsValid validates a create timer message.
 func IsValid(pb *messaging.Create) error {
-	_, err := New(pb, "")
+	_, err := New(pb, nil, nil, nil)
 	return err
-
 }
 
-// New creates a Timer from a create timer message and a primary key.
-func New(pb *messaging.Create, pk string) (Timer, error) {
-	exec, err := newExecute(pb.Task)
+// New creates a Timer from the given create message and handlers.
+func New(create *messaging.Create, recordExecution func(*messaging.Execute), recordTermination func(), clock clockwork.Clock) (Timer, error) {
+	return NewWithProgress(create, nil, recordExecution, recordTermination, clock)
+}
+
+// NewWithProgress creates a new timer with the given create message, progress, and handlers.
+func NewWithProgress(create *messaging.Create, prog *messaging.Progress, recordExecution func(*messaging.Execute), recordTermination func(), clock clockwork.Clock) (Timer, error) {
+	exec, err := newExecute(create.Task)
 	if err != nil {
 		return nil, errors.New("invalid task: " + err.Error())
 	}
 
-	sched, err := newSchedule(pb.Schedule)
+	sched, err := newSchedule(create.Schedule)
 	if err != nil {
 		return nil, errors.New("invalid schedule: " + err.Error())
 	}
 
 	return &timer{
-		pk:       pk,
-		execute:  exec,
-		schedule: sched,
-		ready:    atomic.NewBool(true),
-		active:   atomic.NewBool(false),
-		stop:     make(chan struct{}),
+		execute:           exec,
+		schedule:          sched,
+		progress:          progressFromProto(prog),
+		clock:             clock,
+		recordExecution:   recordExecution,
+		recordTermination: recordTermination,
+		ready:             atomic.NewBool(true),
+		active:            atomic.NewBool(false),
+		stop:              make(chan struct{}),
 	}, nil
 }
 
-func (t *timer) WithProgress(pb *messaging.Progress) Timer {
-	return &timer{
-		pk:       t.pk,
-		execute:  t.execute,
-		schedule: t.schedule,
-		progress: progressFromProto(pb),
-		ready:    atomic.NewBool(true),
-		active:   atomic.NewBool(false),
-		stop:     make(chan struct{}),
-	}
-}
-
-func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), finishTimer func(pk string), clock clockwork.Clock) {
+func (t *timer) Start() {
 	if !t.ready.CAS(true, false) { // make it so Start can't be called
 		return
 	}
@@ -93,24 +88,24 @@ func (t *timer) Start(executeTimer func(execMsg *messaging.Execute, pk string), 
 	go func() {
 
 		for {
-			currFire := t.schedule(t.progress, clock.Now())
+			currFire := t.schedule(t.progress, t.clock.Now())
 
 			if currFire == nil {
-				finishTimer(t.pk)
+				t.recordTermination()
 				return
 			}
 
 			select {
-			case now := <-clock.After(currFire.Sub(clock.Now())):
+			case now := <-t.clock.After(currFire.Sub(t.clock.Now())):
 				res := t.execute()
 
 				t.progress.completedExecutions++
 				t.progress.lastExecution = &now
 
-				executeTimer(&messaging.Execute{
+				t.recordExecution(&messaging.Execute{
 					Progress: progressToProto(t.progress),
 					Result:   res,
-				}, t.pk)
+				})
 
 			case <-t.stop:
 				return
