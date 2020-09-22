@@ -14,7 +14,7 @@ import (
 )
 
 var testCases = []struct {
-	timer           Timer
+	timer           *timer
 	startTime       time.Time // time when timer.Start should be called.
 	expectedResults map[time.Time]*messaging.Execute
 	expectFinish    bool // whether the timer is expected to self terminate after executions.
@@ -52,7 +52,7 @@ var testCases = []struct {
 			},
 			progress{
 				// correctly did its first fire
-				lastExecution:       time.Unix(60, 0),
+				lastExecution:       unixTimePointer(60),
 				completedExecutions: 1,
 			}),
 		startTime: time.Unix(150, 0), // node doesn't get the timer until 150 seconds past epoch
@@ -78,7 +78,7 @@ var testCases = []struct {
 			},
 			progress{
 				// correctly did its first fire
-				lastExecution:       time.Unix(60, 0),
+				lastExecution:       unixTimePointer(60),
 				completedExecutions: 1,
 			}),
 		startTime:       time.Unix(40, 0),                   // node gets the timer before its last fire, shoudn't matter.
@@ -90,18 +90,19 @@ var testCases = []struct {
 func TestTimer(t *testing.T) {
 Outer:
 	for idx, cfg := range testCases {
-		var executions, finishes = make(chan *messaging.Execute), make(chan struct{})
-		var fc = clockwork.NewFakeClockAt(cfg.startTime)
+		executions, finishes := make(chan *messaging.Execute), make(chan struct{})
+		fc := clockwork.NewFakeClockAt(cfg.startTime)
 
-		cfg.timer.Start(
-			func(execMsg *messaging.Execute, _ string) {
-				executions <- execMsg
-			},
-			func(string) {
-				finishes <- struct{}{}
-			},
-			fc,
-		)
+		cfg.timer.clock = fc
+		cfg.timer.recordExecution = func(execMsg *messaging.Execute) {
+			executions <- execMsg
+		}
+
+		cfg.timer.recordTermination = func() {
+			finishes <- struct{}{}
+		}
+
+		cfg.timer.Start()
 
 		// get the times from the expected results so we can iterate through them in sorted order
 		var times = make([]time.Time, 0, len(cfg.expectedResults))
@@ -160,7 +161,7 @@ Outer:
 	}
 }
 
-func newTimerOptimistic(sched *common.Schedule, prog progress) Timer {
+func newTimerOptimistic(sched *common.Schedule, prog progress) *timer {
 	s, err := newSchedule(sched)
 	if err != nil {
 		panic(err)
@@ -170,17 +171,12 @@ func newTimerOptimistic(sched *common.Schedule, prog progress) Timer {
 		execute:  func() []byte { return nil },
 		schedule: s,
 		progress: prog,
-
-		ready:  atomic.NewBool(true),
-		active: atomic.NewBool(false),
-		stop:   make(chan struct{}),
+		active:   atomic.NewBool(false),
+		stop:     make(chan struct{}),
 	}
 }
 
-func newSchedulePanicOnErr(pb *common.Schedule) schedule {
-	sched, err := newSchedule(pb)
-	if err != nil {
-		panic(err)
-	}
-	return sched
+func unixTimePointer(seconds int64) *time.Time {
+	t := time.Unix(seconds, 0)
+	return &t
 }
