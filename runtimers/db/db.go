@@ -15,7 +15,7 @@ import (
 
 type (
 	Client interface {
-		GetTimerProgresses(ctx context.Context, pks []string) (map[string]*messaging.Progress, error)
+		GetProgresses(ctx context.Context, partition int) (map[string]*messaging.Progress, error)
 	}
 
 	client struct {
@@ -38,11 +38,11 @@ type elasticFormat struct {
 	} `json:"hits"`
 }
 
-func (c *client) GetTimerProgresses(ctx context.Context, pks []string) (map[string]*messaging.Progress, error) {
+func (c *client) GetProgresses(ctx context.Context, partition int) (map[string]*messaging.Progress, error) {
 
 	req := esapi.SearchRequest{
 		Index: []string{c.progressIndex},
-		Body:  strings.NewReader(fmt.Sprint(`{"query": { "ids" : { values: `, pks, `}}}`)),
+		Body:  strings.NewReader(fmt.Sprint(`{"query": { "match" : { "partition": `, partition, `}}}`)),
 	}
 
 	res, err := req.Do(ctx, c.elastic)
@@ -59,7 +59,7 @@ func (c *client) GetTimerProgresses(ctx context.Context, pks []string) (map[stri
 		return nil, err
 	}
 
-	out := make(map[string]*messaging.Progress, len(pks)) // omit len(pks)? its an upper bound
+	out := make(map[string]*messaging.Progress)
 
 	for _, hit := range eF.Hits {
 		out[*hit.ID] = hit.Source

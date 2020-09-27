@@ -1,26 +1,27 @@
-package app
+package rest
 
 import (
 	"net/http"
+	"net/url"
 
-	"github.com/nivista/steady/webservice/util"
-
-	"github.com/nivista/steady/webservice/db"
-	"github.com/nivista/steady/webservice/queue"
-
-	"github.com/nivista/steady/webservice/app/auth"
-	"github.com/nivista/steady/webservice/app/elastic"
+	"github.com/nivista/steady/frontend/db"
+	"github.com/nivista/steady/frontend/queue"
+	"github.com/nivista/steady/frontend/services/rest/auth"
+	"github.com/nivista/steady/frontend/services/rest/elastic"
+	"github.com/nivista/steady/frontend/util"
 )
 
 var clientIDKey int
 
 type app struct {
-	db                                       db.Client
-	queue                                    queue.Client
-	timersIndex, executionsIndex, elasticURL string
+	db                           db.Client
+	queue                        queue.Client
+	timersIndex, executionsIndex string
+	elasticURL                   *url.URL
 }
 
-func NewApp(db db.Client, queue queue.Client, timersIndex, executionsIndex, elasticURL string) http.Handler {
+// NewApp returns an http handler that handles the REST part of steady's API.
+func NewApp(db db.Client, queue queue.Client, timersIndex, executionsIndex string, elasticURL *url.URL) http.Handler {
 	return app{
 		db:              db,
 		queue:           queue,
@@ -33,20 +34,20 @@ func NewApp(db db.Client, queue queue.Client, timersIndex, executionsIndex, elas
 func (a app) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var head string
 	head, r.URL.Path = util.ShiftPath(r.URL.Path)
+
 	switch head {
 	case "auth":
 		auth.NewAuth(a.db).ServeHTTP(w, r)
 	case "elastic":
-		a.AuthMiddleware(w, r, elastic.NewElastic(a.timersIndex, a.executionsIndex, a.elasticURL))
+		a.auth(w, r, elastic.NewElastic(a.timersIndex, a.executionsIndex, a.elasticURL))
 
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-
 }
 
-func (a app) AuthMiddleware(w http.ResponseWriter, r *http.Request, handler http.Handler) {
+func (a app) auth(w http.ResponseWriter, r *http.Request, handler http.Handler) {
 	clientID, clientSecret, ok := r.BasicAuth()
 	if !ok {
 		w.WriteHeader(http.StatusUnauthorized)

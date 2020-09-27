@@ -61,6 +61,7 @@ func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 	// drop and stop whatever partitions you need to.
 	c.coord.HandleRepartition(partitions)
 
+	// start goroutine to collect from elasticsearch
 	return nil
 }
 

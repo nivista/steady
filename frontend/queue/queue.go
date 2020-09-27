@@ -1,6 +1,8 @@
 package queue
 
 import (
+	"hash/crc32"
+
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
@@ -17,13 +19,13 @@ type (
 
 	client struct {
 		producer   sarama.SyncProducer
-		partitions int32
+		partitions int
 		topic      string
 	}
 )
 
 // NewClient returns a new Client.
-func NewClient(producer sarama.SyncProducer, partitions int32, topic string) Client {
+func NewClient(producer sarama.SyncProducer, partitions int, topic string) Client {
 	return &client{
 		producer:   producer,
 		partitions: partitions,
@@ -77,13 +79,5 @@ func (c *client) PublishDelete(domain string, timerID uuid.UUID) error {
 }
 
 func (c *client) bytesToPartition(id [16]byte) int32 {
-	var partition int32
-
-	for _, b := range id {
-		partition = partition << 8
-		partition += int32(b)
-		partition = partition % c.partitions
-	}
-
-	return partition
+	return int32(crc32.ChecksumIEEE(id[:]) % uint32(c.partitions))
 }

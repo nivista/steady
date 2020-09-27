@@ -14,32 +14,45 @@ import (
 )
 
 type (
+	// Client is a client to the database.
 	Client interface {
-		UpsertUser(ctx context.Context, id, apiKey string) error
+		UpsertUser(ctx context.Context, apiToken, apiKey string) error
 		AuthenticateUser(ctx context.Context, apiToken, apiSecret string) error
 	}
+
+	// InvalidAPIToken is the error returned when provided with an invalid APIToken
+	InvalidAPIToken error
+
+	// InvalidAPISecret is the error returned when provided with an invalid APISecret
+	InvalidAPISecret error
 
 	client struct {
 		elastic *elasticsearch.Client
 	}
 )
 
+var (
+	errInvalidAPIToken  InvalidAPIToken  = errors.New("invalid api token")
+	errInvalidAPISecret InvalidAPISecret = errors.New("invalid api secret")
+)
+
+// NewClient returns a new client to the database.
 func NewClient(elastic *elasticsearch.Client) Client {
 	return &client{
 		elastic: elastic,
 	}
 }
 
-func (c *client) UpsertUser(ctx context.Context, id, hashedApiSecret string) error {
+func (c *client) UpsertUser(ctx context.Context, apiToken, hashedAPISecret string) error {
 	// index : users
 	// id    : just the id of the user
 
 	indexRequest := esapi.IndexRequest{
 		Index:      "users",
-		DocumentID: id,
+		DocumentID: apiToken,
 		Body: strings.NewReader(fmt.Sprint(`{
 			"doc": {
-				"hashed_api_key": "`, hashedApiSecret,
+				"hashed_api_key": "`, hashedAPISecret,
 			`" }	
 		}`)),
 	}
@@ -47,11 +60,6 @@ func (c *client) UpsertUser(ctx context.Context, id, hashedApiSecret string) err
 	return err
 
 }
-
-type (
-	InvalidAPIToken  error
-	InvalidAPISecret error
-)
 
 func (c *client) AuthenticateUser(ctx context.Context, apiToken, apiSecret string) error {
 	res, err := c.elastic.Get("users", apiToken)
@@ -65,7 +73,7 @@ func (c *client) AuthenticateUser(ctx context.Context, apiToken, apiSecret strin
 		return err
 	}
 
-	type elasticResponse struct {
+	var elasticRes struct {
 		Found  bool `json:"found"`
 		Source struct {
 			Doc struct {
@@ -74,18 +82,17 @@ func (c *client) AuthenticateUser(ctx context.Context, apiToken, apiSecret strin
 		} `json:"_source"`
 	}
 
-	var elRes elasticResponse
-	err = json.Unmarshal(data, &elRes)
+	err = json.Unmarshal(data, &elasticRes)
 	if err != nil {
 		return err
 	}
 
 	if elRes.Found == false {
-		return InvalidAPIToken(errors.New("invalid api token"))
+		return errInvalidAPIToken
 	}
 
 	if err = bcrypt.CompareHashAndPassword([]byte(elRes.Source.Doc.HashedAPIKey), []byte(apiSecret)); err != nil {
-		return InvalidAPISecret(err)
+		return errInvalidAPISecret
 	}
 
 	return nil

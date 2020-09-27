@@ -34,7 +34,7 @@ const (
 	kafkaGroupID           = "KAFKA_GROUP_ID"
 )
 
-func main() {
+func init() {
 	viper.SetDefault(elasticURL, "http://localhost:9200")
 	viper.SetDefault(elasticExecutionsIndex, "executions")
 	viper.SetDefault(elasticProgressIndex, "progress")
@@ -55,21 +55,20 @@ func main() {
 			}
 		}
 	}
-
+}
+func main() {
 	// set up database
 	ctx, cancel := context.WithCancel(context.Background())
-
 	elasticCfg := elasticsearch.Config{
 		Addresses: []string{viper.GetString(elasticURL)},
 	}
-
 	elasticClient, err := elasticsearch.NewClient(elasticCfg)
 	if err != nil {
 		panic(err)
 	}
-
 	db := db.NewClient(elasticClient, viper.GetString(elasticExecutionsIndex), viper.GetString(elasticProgressIndex), viper.GetString(elasticTimersIndex))
-	// Get Kafka Version
+
+	// get Kafka Version
 	version, err := sarama.ParseKafkaVersion(viper.GetString("KAFKA_VERSION"))
 	if err != nil {
 		panic(err)
@@ -80,13 +79,11 @@ func main() {
 	config.Version = version
 	config.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRoundRobin
 
-	// set up consumer group
+	// set up consumer
 	client, err := sarama.NewConsumerGroup(viper.GetStringSlice(kafkaBrokers), viper.GetString(kafkaGroupID), config)
 	if err != nil {
 		panic(err)
 	}
-
-	// set up consumer
 	consumer := consumer.NewConsumer(db, viper.GetString(createTopic), viper.GetString(executeTopic))
 
 	// consume

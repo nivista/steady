@@ -30,6 +30,10 @@ func NewCoordinator(producer sarama.AsyncProducer, db db.Client, createTopic, ex
 }
 
 func (c *Coordinator) Stop() {
+	for _, manager := range c.managers {
+		manager.stop()
+	}
+
 	c.producer.AsyncClose()
 }
 

@@ -27,7 +27,6 @@ func NewConsumer(nodeID, createTopic, executeTopic string) sarama.ConsumerGroupH
 func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 
 	for topic, partitions := range session.Claims() {
-		fmt.Println(topic, partitions)
 		for _, partition := range partitions {
 			session.ResetOffset(topic, partition, -1, "")
 

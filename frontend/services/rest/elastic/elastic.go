@@ -7,18 +7,20 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/nivista/steady/webservice/util"
+	"github.com/nivista/steady/frontend/util"
 )
 
 type elastic struct {
-	elasticURL, timersIndex, executionsIndex string
+	timersIndex, executionsIndex string
+	proxy                        *httputil.ReverseProxy
 }
 
-func NewElastic(timersIndex, executionsIndex, elasticURL string) http.Handler {
+// NewElastic returns a new handler that redirects to elatic.
+func NewElastic(timersIndex, executionsIndex string, elasticURL *url.URL) http.Handler {
 	return elastic{
 		timersIndex:     timersIndex,
 		executionsIndex: executionsIndex,
-		elasticURL:      elasticURL,
+		proxy:           httputil.NewSingleHostReverseProxy(elasticURL),
 	}
 }
 
@@ -43,17 +45,11 @@ func (e elastic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, err := url.Parse("http://127.0.0.1:9200")
-	if err != nil {
-		panic(err)
-	}
-	proxy := httputil.NewSingleHostReverseProxy(addr)
-
 	clientID, ok = util.GetClientID(r.Context())
 	if !ok {
 		fmt.Println("elastic servehttp got context with no clientID.")
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	proxy.ServeHTTP(w, r)
+	e.proxy.ServeHTTP(w, r)
 }

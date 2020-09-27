@@ -23,7 +23,9 @@ type Manager struct {
 	Active       bool
 	GenerationID string
 
-	timers   map[string]timer.Timer
+	creates map[string]*messaging.Create
+	timers  map[string]timer.Timer
+
 	producer chan<- *sarama.ProducerMessage
 	clock    clockwork.Clock
 }

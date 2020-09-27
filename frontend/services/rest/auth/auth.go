@@ -6,14 +6,18 @@ import (
 	"math/big"
 	"net/http"
 
-	"github.com/nivista/steady/webservice/db"
-	"github.com/nivista/steady/webservice/util"
+	"github.com/nivista/steady/frontend/db"
+	"github.com/nivista/steady/frontend/util"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	goauth "google.golang.org/api/oauth2/v2"
 	"google.golang.org/api/option"
 )
+
+type authHandler struct {
+	db db.Client
+}
 
 var config = oauth2.Config{
 	ClientID:     "1097208656533-2dks16lohh6hc2567ttpotbk63q0uhsq.apps.googleusercontent.com",
@@ -23,19 +27,14 @@ var config = oauth2.Config{
 	Scopes:       []string{"openid"},
 }
 
-type authHandler struct {
-	db db.Client
-}
-
+// NewAuth returns a new auth handler.
 func NewAuth(db db.Client) http.Handler {
-
 	return authHandler{
 		db: db,
 	}
 }
 
 func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
 	var head string
 	head, r.URL.Path = util.ShiftPath(r.URL.Path)
 
@@ -44,28 +43,25 @@ func (a authHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		head, r.URL.Path = util.ShiftPath(r.URL.Path)
 		switch head {
 		case "":
-			a.getAPIKey(w, r)
+			a.oauthRedirect(w, r)
 		case "callback":
-			a.getAPIKeyCallback(w, r)
+			a.oauthCallback(w, r)
 		default:
 			w.WriteHeader(http.StatusNotFound)
-			return
 		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
 }
 
-// first step in getting API key
-// redirects to google oauthHandler
-func (a authHandler) getAPIKey(res http.ResponseWriter, req *http.Request) {
+// redirects to google oauth permissions screen.
+func (a authHandler) oauthRedirect(res http.ResponseWriter, req *http.Request) {
 	url := config.AuthCodeURL("state")
 	http.Redirect(res, req, url, http.StatusFound)
 }
 
-// callback with authorization grant
-// we then go to google, verify it's legit, do an update to the user and give the ID.
-func (a authHandler) getAPIKeyCallback(res http.ResponseWriter, req *http.Request) {
+// verify that authentication grant is real, make user a new api secret.
+func (a authHandler) oauthCallback(res http.ResponseWriter, req *http.Request) {
 	token, err := config.Exchange(req.Context(), req.URL.Query().Get("code"))
 	if err != nil {
 		res.WriteHeader(http.StatusBadRequest)
@@ -87,7 +83,7 @@ func (a authHandler) getAPIKeyCallback(res http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	apiKeyInt, err := rand.Int(rand.Reader, big.NewInt(1<<31))
+	apiKeyInt, err := rand.Int(rand.Reader, big.NewInt(1<<62))
 	if err != nil {
 		res.WriteHeader(http.StatusInternalServerError)
 		res.Write([]byte(err.Error()))
@@ -96,14 +92,14 @@ func (a authHandler) getAPIKeyCallback(res http.ResponseWriter, req *http.Reques
 	apiKeyString := apiKeyInt.String()
 	apiKeyBytes := []byte(apiKeyString)
 
-	hashedApiKey, err := bcrypt.GenerateFromPassword(apiKeyBytes, bcrypt.DefaultCost)
+	hashedAPIKey, err := bcrypt.GenerateFromPassword(apiKeyBytes, bcrypt.DefaultCost)
 	if err != nil {
 		res.WriteHeader(http.StatusInternalServerError)
 		res.Write([]byte(err.Error()))
 		return
 	}
 
-	err = a.db.UpsertUser(req.Context(), userInfoRes.Id, string(hashedApiKey))
+	err = a.db.UpsertUser(req.Context(), userInfoRes.Id, string(hashedAPIKey))
 	if err != nil {
 		res.WriteHeader(http.StatusInternalServerError)
 		res.Write([]byte(err.Error()))
