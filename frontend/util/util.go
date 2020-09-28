@@ -1,10 +1,28 @@
 package util
 
 import (
+	"context"
 	"encoding/base64"
 	"path"
 	"strings"
 )
+
+type key int
+
+const (
+	clientIDKey key = iota
+)
+
+// SetClientID returns a new context with clientID set.
+func SetClientID(ctx context.Context, clientID string) context.Context {
+	return context.WithValue(ctx, clientIDKey, clientID)
+}
+
+// GetClientID returns the clientID and true if the context has that clientID, otherwise ok is false.
+func GetClientID(ctx context.Context) (clientID string, ok bool) {
+	v, ok := ctx.Value(clientIDKey).(string)
+	return v, ok
+}
 
 // ParseBasicAuth parses an HTTP Basic Authentication string.
 // copied from "net/http"
