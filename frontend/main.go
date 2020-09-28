@@ -83,7 +83,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	queueClient := queue.NewClient(producer, viper.GetInt32(partitions), viper.GetString(createTopic))
+	queueClient := queue.NewClient(producer, viper.GetInt(partitions), viper.GetString(createTopic))
 
 	// DB setup
 	elasticClient, err := elasticsearch.NewDefaultClient()

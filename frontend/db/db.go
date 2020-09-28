@@ -1,15 +1,15 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
-	"strings"
 
 	"github.com/elastic/go-elasticsearch"
 	"github.com/elastic/go-elasticsearch/v8/esapi"
+	"github.com/nivista/steady/elastic"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -37,10 +37,6 @@ var (
 	errInvalidAPISecret InvalidAPISecret = errors.New("invalid api secret")
 )
 
-const (
-	upsertUserBody  = `"doc": {"hashed_api_key": "%v" }`
-}
-
 // NewClient returns a new client to the database.
 func NewClient(elastic *elasticsearch.Client, usersIndex string) Client {
 	return &client{
@@ -49,19 +45,29 @@ func NewClient(elastic *elasticsearch.Client, usersIndex string) Client {
 	}
 }
 
+// UpsertUser upserts a user to the database.
 func (c *client) UpsertUser(ctx context.Context, apiToken, hashedAPISecret string) error {
+	data, err := json.Marshal(elastic.Index{
+		Doc: elastic.User{
+			HashedAPIKey: hashedAPISecret,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
 	indexRequest := esapi.IndexRequest{
 		Index:      c.usersIndex,
 		DocumentID: apiToken,
-		Body: strings.NewReader(fmt.Sprintf(upsertUserBody, hashedAPISecret)),
+		Body:       bytes.NewReader(data),
 	}
-	_, err := indexRequest.Do(ctx, c.elastic.Transport)
+	_, err = indexRequest.Do(ctx, c.elastic.Transport)
 	return err
 
 }
 
 func (c *client) AuthenticateUser(ctx context.Context, apiToken, apiSecret string) error {
-	res, err := c.elastic.Get("users", apiToken)
+	res, err := c.elastic.Get(c.usersIndex, apiToken)
 	if err != nil {
 		return err
 	}
@@ -72,25 +78,23 @@ func (c *client) AuthenticateUser(ctx context.Context, apiToken, apiSecret strin
 		return err
 	}
 
-	var elasticRes struct {
-		Found  bool `json:"found"`
-		Source struct {
-			Doc struct {
-				HashedAPIKey string `json:"hashed_api_key"`
-			} `json:"doc"`
-		} `json:"_source"`
-	}
-
-	err = json.Unmarshal(data, &elasticRes)
+	var get elastic.Get
+	err = json.Unmarshal(data, &get)
 	if err != nil {
 		return err
 	}
 
-	if elRes.Found == false {
+	if get.Found == false {
 		return errInvalidAPIToken
 	}
 
-	if err = bcrypt.CompareHashAndPassword([]byte(elRes.Source.Doc.HashedAPIKey), []byte(apiSecret)); err != nil {
+	var user elastic.User
+	err = json.Unmarshal(get.Source.Doc, &user)
+	if err != nil {
+		return err
+	}
+
+	if err = bcrypt.CompareHashAndPassword([]byte(user.HashedAPIKey), []byte(apiSecret)); err != nil {
 		return errInvalidAPISecret
 	}
 
