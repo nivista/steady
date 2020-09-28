@@ -37,6 +37,10 @@ var (
 	errInvalidAPISecret InvalidAPISecret = errors.New("invalid api secret")
 )
 
+const (
+	upsertUserBody  = `"doc": {"hashed_api_key": "%v" }`
+}
+
 // NewClient returns a new client to the database.
 func NewClient(elastic *elasticsearch.Client, usersIndex string) Client {
 	return &client{
@@ -46,17 +50,10 @@ func NewClient(elastic *elasticsearch.Client, usersIndex string) Client {
 }
 
 func (c *client) UpsertUser(ctx context.Context, apiToken, hashedAPISecret string) error {
-	// index : users
-	// id    : just the id of the user
-
 	indexRequest := esapi.IndexRequest{
 		Index:      c.usersIndex,
 		DocumentID: apiToken,
-		Body: strings.NewReader(fmt.Sprint(`{
-			"doc": {
-				"hashed_api_key": "`, hashedAPISecret,
-			`" }	
-		}`)),
+		Body: strings.NewReader(fmt.Sprintf(upsertUserBody, hashedAPISecret)),
 	}
 	_, err := indexRequest.Do(ctx, c.elastic.Transport)
 	return err
