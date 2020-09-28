@@ -3,10 +3,12 @@ package elastic
 import "encoding/json"
 
 type (
-	User struct {
-		HashedAPIKey string `json:"hashed_api_key"`
+	// Index is a request to index a new document.
+	Index struct {
+		Doc interface{} `json:"doc"`
 	}
 
+	// Get is the response to a get request.
 	Get struct {
 		Found  bool `json:"found"`
 		Source struct {
@@ -14,7 +16,8 @@ type (
 		} `json:"_source"`
 	}
 
-	Index struct {
-		Doc interface{} `json:"doc"`
+	// User is a user document.
+	User struct {
+		HashedAPIKey string `json:"hashed_api_key"`
 	}
 )
