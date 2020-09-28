@@ -90,6 +90,7 @@ func (s *server) DeleteTimer(ctx context.Context, req *services.DeleteTimerReque
 	return &services.DeleteTimerResponse{}, nil
 }
 
+// GetAuth returns a UnaryServerInterceptor that authenticates requests.
 func GetAuth(client db.Client) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 		md, ok := metadata.FromIncomingContext(ctx)
@@ -119,9 +120,6 @@ func GetAuth(client db.Client) grpc.UnaryServerInterceptor {
 
 			return nil, grpc.Errorf(codes.Internal, "")
 		}
-
 		return handler(util.SetClientID(ctx, clientID), req)
-
 	}
-
 }

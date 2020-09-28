@@ -31,6 +31,7 @@ const (
 	elasticURL             = "ELASTIC_URL"
 	elasticExecutionsIndex = "EXECUTIONS"
 	elasticTimersIndex     = "TIMERS"
+	elasticUsersIndex      = "USERS"
 	postgresURL            = "POSTGRES_URL"
 	createTopic            = "KAFKA_TOPIC"
 	partitions             = "PARTITIONS"
@@ -43,6 +44,7 @@ func init() {
 	viper.SetDefault(elasticURL, "http://localhost:9200")
 	viper.SetDefault(elasticExecutionsIndex, "executions")
 	viper.SetDefault(elasticTimersIndex, "timers")
+	viper.SetDefault(elasticUsersIndex, "users")
 	viper.SetDefault(postgresURL, "postgresql://")
 	viper.SetDefault(createTopic, "create")
 	viper.SetDefault(partitions, 1)
@@ -88,7 +90,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	dbClient := db.NewClient(elasticClient)
+	dbClient := db.NewClient(elasticClient, viper.GetString(elasticUsersIndex))
 
 	l, err := net.Listen("tcp", viper.GetString(addr))
 	if err != nil {
