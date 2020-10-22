@@ -141,6 +141,9 @@ func progressToProto(p progress) *messaging.Progress {
 }
 
 func progressFromProto(pb *messaging.Progress) progress {
+	if pb == nil {
+		return progress{}
+	}
 	var last time.Time
 	if pb.LastExecution != nil {
 		last = pb.LastExecution.AsTime()

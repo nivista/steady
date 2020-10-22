@@ -6,7 +6,6 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
-	"github.com/nivista/steady/timer"
 
 	"github.com/nivista/steady/runtimers/coordinator"
 	"google.golang.org/protobuf/proto"
@@ -38,7 +37,7 @@ func (c *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 
 	for _, partition := range partitions {
 		// if we already have this partition, do nothing
-		if c.coord.HasPartition(partition) {
+		if c.coord.HasPartition(int(partition)) {
 			continue
 		}
 
@@ -73,7 +72,7 @@ func (c *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
 // ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
 func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 
-	var man = c.coord.GetManager(claim.Partition())
+	var man = c.coord.GetManager(int(claim.Partition()))
 
 	// this happens concurrently with the firing of timers and affects messages produced.
 	// we want the gaurantee that we will send producer messages w/ monotonically increasing generationIDs.
@@ -93,8 +92,14 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 		if msg.Key == nil && headers["generationID"] == man.GenerationID {
 			// this is a dummy key that i sent
 
-			man.Start(session.Context())
+			man.RecievedDummy()
 
+			session.MarkMessage(msg, "")
+			continue
+		}
+
+		if msg.Key == nil {
+			// someone elses dummy key
 			session.MarkMessage(msg, "")
 			continue
 		}
@@ -103,6 +108,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 
 		if msg.Value == nil {
 			man.RemoveTimer(pk)
+			session.MarkMessage(msg, "")
 			continue
 		}
 
@@ -113,16 +119,7 @@ func (c *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim saram
 			continue
 		}
 
-		t, err := timer.New(&create, pk)
-		if err != nil {
-			fmt.Println("consume claim timer.New error:", err.Error())
-		}
-
-		err = man.AddTimer(pk, t)
-		if err != nil {
-			fmt.Println("consume claim add timer:", err.Error())
-			continue
-		}
+		man.CreateTimer(pk, &create)
 
 		session.MarkMessage(msg, "")
 	}

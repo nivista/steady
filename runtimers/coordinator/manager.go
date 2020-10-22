@@ -3,10 +3,12 @@ package coordinator
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/Shopify/sarama"
 	"github.com/jonboulle/clockwork"
 	"github.com/nivista/steady/runtimers/db"
+	"go.uber.org/atomic"
 
 	"github.com/nivista/steady/internal/.gen/protos/messaging"
 
@@ -17,82 +19,119 @@ import (
 // Manager manages a partition of timers. It is not concurrency safe.
 type Manager struct {
 	createTopic, executeTopic string
-	partition                 int32
+	partition                 int
 	db                        db.Client
 
-	Active       bool
 	GenerationID string
 
-	creates map[string]*messaging.Create
-	timers  map[string]timer.Timer
+	haveCreates    bool
+	haveProgresses bool
+	started        *atomic.Bool
+
+	creates    map[string]*messaging.Create
+	progresses map[string]*messaging.Progress
+	timers     map[string]timer.Timer
+	timersLock sync.Mutex
 
 	producer chan<- *sarama.ProducerMessage
 	clock    clockwork.Clock
 }
 
 // unexported because the lifecycle of managers is managed by coordinator.
-func newManager(producer chan<- *sarama.ProducerMessage, db db.Client, createTopic, executeTopic string, partition int32, clock clockwork.Clock) *Manager {
-	return &Manager{
+func newManager(producer chan<- *sarama.ProducerMessage, db db.Client, createTopic, executeTopic string, partition int, clock clockwork.Clock) *Manager {
+	manager := Manager{
 		timers:       make(map[string]timer.Timer),
+		progresses:   make(map[string]*messaging.Progress),
+		creates:      make(map[string]*messaging.Create),
 		db:           db,
 		producer:     producer,
 		clock:        clock,
 		partition:    partition,
+		started:      atomic.NewBool(false),
 		createTopic:  createTopic,
 		executeTopic: executeTopic,
 	}
+	// query from db
+	go func() {
+		var err error
+		for i := 0; i < 10; i++ {
+			manager.progresses, err = db.GetProgresses(context.TODO(), partition)
+			if err != nil {
+				fmt.Printf("ERROR: getting progresses from db.")
+			} else {
+				break
+			}
+		}
+		if err != nil {
+			// escalate to a panic if we can't reach database
+			panic(fmt.Errorf("unable to get progress from db: %w", err))
+		}
+		manager.haveProgresses = true
+		manager.attemptStart()
+	}()
+
+	return &manager
 }
 
-// AddTimer adds a timer to the manager, and starts it if the manager is active.
-func (m *Manager) AddTimer(pk string, t timer.Timer) error {
-	m.timers[pk] = t
-
-	if m.Active {
-		m.startTimer(pk)
+func (m *Manager) attemptStart() {
+	m.timersLock.Lock()
+	defer m.timersLock.Unlock()
+	fmt.Println(m.haveCreates, m.haveProgresses)
+	if m.haveCreates && m.haveProgresses {
+		s := m.started.CAS(false, true)
+		fmt.Println(s)
+		if s {
+			for id, create := range m.creates {
+				t, err := timer.NewWithProgress(create, m.progresses[id], m.executeTimerFunc(id), m.finishTimerFunc(id), m.clock)
+				if err == nil {
+					m.timers[id] = t
+					t.Start()
+				} else {
+					fmt.Printf("error timer.NewWithProgress with id %v: %v\n", id, err)
+				}
+			}
+		}
 	}
+}
 
-	return nil
+// CreateTimer adds a timer to the manager, and starts it if the manager is active.
+func (m *Manager) CreateTimer(pk string, create *messaging.Create) {
+	if m.started.Load() {
+		t, err := timer.New(create, m.executeTimerFunc(pk), m.finishTimerFunc(pk), m.clock)
+		if err == nil {
+			fmt.Println("error constructing timer with id %v: %v", pk, err.Error())
+		} else {
+			m.timersLock.Lock()
+			m.timers[pk] = t
+			t.Start()
+			m.timersLock.Unlock()
+		}
+	} else {
+		err := timer.IsValid(create)
+		if err == nil {
+			m.creates[pk] = create
+		} else {
+			fmt.Println("recieved invalid create id %v: %v", create, err.Error())
+		}
+	}
 }
 
 // RemoveTimer stops a timer if it is running and removes it from the manager.
 func (m *Manager) RemoveTimer(pk string) {
-	timer, ok := m.timers[pk]
-	if !ok {
-		return
+	if m.started.Load() {
+		m.timersLock.Lock()
+		go m.timers[pk].Stop()
+		delete(m.timers, pk)
+		m.timersLock.Unlock()
+	} else {
+		delete(m.creates, pk)
 	}
-
-	go timer.Stop()
-
-	delete(m.timers, pk)
 }
 
-// Start starts all the managers timers, and causes new timers that are created to also be started.
-func (m *Manager) Start(ctx context.Context) error {
-	if m.Active == true {
-		return nil
-	}
-	m.Active = true
-
-	var timerPks = make([]string, len(m.timers))
-	i := 0
-	for pk := range m.timers {
-		timerPks[i] = pk
-		i++
-	}
-
-	progs, err := m.db.GetTimerProgresses(ctx, timerPks)
-	if err != nil {
-		return err
-	}
-
-	for pk := range m.timers {
-		prog, ok := progs[pk]
-		if ok {
-			m.timers[pk] = m.timers[pk].WithProgress(prog)
-		}
-		m.startTimer(pk)
-	}
-	return nil
+// RecievedDummy indicates that we've seen the dummy message, so creates recieved can be processed.
+func (m *Manager) RecievedDummy() {
+	m.haveCreates = true
+	m.attemptStart()
 }
 
 func (m *Manager) stop() {
@@ -101,41 +140,38 @@ func (m *Manager) stop() {
 	}
 }
 
-func (m *Manager) startTimer(pk string) {
-	m.timers[pk].Start(m.executeTimerFunc, m.finishTimerFunc, m.clock)
-}
+func (m *Manager) executeTimerFunc(pk string) func(execMsg *messaging.Execute) {
+	return func(execMsg *messaging.Execute) {
+		bytes, err := proto.Marshal(execMsg)
+		if err != nil {
+			fmt.Printf("progress update fn timerData w/ id %v, err proto.Marshal: %v\n", pk, err.Error())
+			return
+		}
 
-func (m *Manager) executeTimerFunc(execMsg *messaging.Execute, pk string) {
-
-	bytes, err := proto.Marshal(execMsg)
-	if err != nil {
-		fmt.Printf("progress update fn timerData w/ id %v, err proto.Marshal: %v\n", pk, err.Error())
-		return
-	}
-
-	m.producer <- &sarama.ProducerMessage{
-		Topic:     m.executeTopic,
-		Key:       sarama.StringEncoder(pk),
-		Value:     sarama.ByteEncoder(bytes),
-		Partition: m.partition,
+		m.producer <- &sarama.ProducerMessage{
+			Topic:     m.executeTopic,
+			Key:       sarama.StringEncoder(pk),
+			Value:     sarama.ByteEncoder(bytes),
+			Partition: int32(m.partition),
+		}
 	}
 
 }
 
-func (m *Manager) finishTimerFunc(pk string) {
-	m.producer <- &sarama.ProducerMessage{
-		Topic:     m.createTopic,
-		Key:       sarama.StringEncoder(pk),
-		Value:     nil,
-		Partition: m.partition,
-	}
+func (m *Manager) finishTimerFunc(pk string) func() {
+	return func() {
+		m.producer <- &sarama.ProducerMessage{
+			Topic:     m.createTopic,
+			Key:       sarama.StringEncoder(pk),
+			Value:     nil,
+			Partition: int32(m.partition),
+		}
 
-	m.producer <- &sarama.ProducerMessage{
-		Topic:     m.executeTopic,
-		Key:       sarama.StringEncoder(pk),
-		Value:     nil,
-		Partition: m.partition,
+		m.producer <- &sarama.ProducerMessage{
+			Topic:     m.executeTopic,
+			Key:       sarama.StringEncoder(pk),
+			Value:     nil,
+			Partition: int32(m.partition),
+		}
 	}
-
-	// TODO remove timer from manager?? or wait until we get Kafka message?
 }

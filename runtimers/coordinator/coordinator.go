@@ -11,7 +11,7 @@ import (
 type Coordinator struct {
 	producer                  sarama.AsyncProducer
 	db                        db.Client
-	managers                  map[int32]*Manager
+	managers                  map[int]*Manager
 	createTopic, executeTopic string
 	clock                     clockwork.Clock
 }
@@ -20,7 +20,7 @@ func NewCoordinator(producer sarama.AsyncProducer, db db.Client, createTopic, ex
 	coord := &Coordinator{
 		producer:     producer,
 		db:           db,
-		managers:     map[int32]*Manager{},
+		managers:     map[int]*Manager{},
 		createTopic:  createTopic,
 		executeTopic: executeTopic,
 		clock:        clock,
@@ -39,9 +39,9 @@ func (c *Coordinator) Stop() {
 
 func (c *Coordinator) HandleRepartition(newPartitions []int32) {
 	// put new partitions in set
-	newPartitionsSet := make(map[int32]struct{})
+	newPartitionsSet := make(map[int]struct{})
 	for _, partition := range newPartitions {
-		newPartitionsSet[partition] = struct{}{}
+		newPartitionsSet[int(partition)] = struct{}{}
 	}
 
 	// cleanup managers for lost partitions
@@ -53,14 +53,14 @@ func (c *Coordinator) HandleRepartition(newPartitions []int32) {
 	}
 }
 
-func (c *Coordinator) GetManager(partition int32) *Manager {
+func (c *Coordinator) GetManager(partition int) *Manager {
 	if _, ok := c.managers[partition]; !ok {
 		c.managers[partition] = newManager(c.producer.Input(), c.db, c.createTopic, c.executeTopic, partition, c.clock)
 	}
 	return c.managers[partition]
 }
 
-func (c *Coordinator) HasPartition(partition int32) bool {
+func (c *Coordinator) HasPartition(partition int) bool {
 	_, ok := c.managers[partition]
 	return ok
 }
