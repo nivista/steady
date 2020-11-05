@@ -25,7 +25,6 @@ message Meta {
     google.protobuf.Timestamp create_time = 1;
 }
 
-
 enum Method {
     GET = 0;
     POST = 1;
